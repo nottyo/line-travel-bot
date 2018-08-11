@@ -1,0 +1,15 @@
+language: python
+python:
+- 3.6
+install:
+- pip install -r requirements.txt
+script:
+- python -m unittest discover
+branches:
+  only:
+  - master
+deploy:
+  provider: heroku
+  api_key:
+    secure: LfGTLO93KWLnD6+EhNcircFHMDBc1RH0L/maeB7c0NWe9kXveLds3At2Ko3mEg/ezI43Zb4hbnW8I9rpOlMK0Nz1szDNbjJt8WIA7OU5m4Z2gh06GRG5B0ti+WbBXSvoMwt+oJkT3gmEGJ+zJJGkYKgMViI0lUeB+8qn/OXcheCHV5/XVw9fqAKiX6BADOFB5tkVGbOyeZZo5M6HoQ8J6xERrFCs2BxuRCcvlwLS2koYvEQjlZKDqDG4N8GBI2O9l72kYC/FmoWa+hquetj2KQg4Rk1mgfNgpmkF9dxN0vHBFSNEfGitjpBiONFTNhWLgeYfHROFSWqMwn2umm0npAQVMo/zCUO9tok9hCgUg9XyRPNRTFblyZMM4NyU7lmVRqnD625qimtb0S7CGMFNlbyH7cC7mI6h84JABU+Dy2NdwX7weDLSpd7rQXFVXqT14zVNbs+as6yzYur20idAlhiJ26yNvPLbDANwdfRegGp+Plp+4MfR06PtAVLAWZfayMwR5/YE51mfl1aCUFSC7SsPpBI6RHpwpTHO/DnxiDpPSUEXihvad8CHc5ip8bhuzUc2MLA9yxRwMTk9MHt+BZ7fMyWuzegPVDJ2pj/g3ox69cOmm6Ij95GozLrBY2OTDHvmOTjvan+rGlWulkV94zH9OTS80BNTL5trQT6R5ZI=
+  app: line-travel-bot
