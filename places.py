@@ -1,10 +1,9 @@
-from flask import request
 import os
-import googlemaps
 import sys
-import json
-import tempfile
 from datetime import datetime
+
+import googlemaps
+from flask import request
 from linebot.models import (
     CarouselContainer, BubbleContainer
 )
@@ -30,8 +29,7 @@ class Places:
                 if chunk:
                     f.write(chunk)
         dist_name = os.path.basename(file_name)
-        photo_url = request.host_url.replace('http', 'https') + os.path.join('static', 'tmp', dist_name)
-        print(photo_url)
+        photo_url = request.host_url.replace('http:', 'https:') + os.path.join('static', 'tmp', dist_name)
         return photo_url
 
     def _format_operating_hours(self, operating_hours):
