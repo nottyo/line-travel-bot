@@ -49,6 +49,7 @@ handler = WebhookHandler(channel_secret)
 
 def make_static_tmp_dir():
     try:
+        print("Create Static Dir: " + static_tmp_path)
         os.makedirs(static_tmp_path)
     except OSError as exc:
         if exc.errno == errno.EEXIST and os.path.isdir(static_tmp_path):
@@ -216,6 +217,7 @@ def handle_text_message(event):
                                                                           contents=bubble_container))
 
 
+make_static_tmp_dir()
+
 if __name__ == '__main__':
-    make_static_tmp_dir()
     app.run(debug=True, port=5000)
