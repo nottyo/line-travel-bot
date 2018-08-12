@@ -3,3 +3,4 @@ requests==2.19.1
 gunicorn==19.8.1
 codecov==2.0.15
 flask==1.0.2
+googlemaps==2.5.1

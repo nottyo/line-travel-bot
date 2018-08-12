@@ -37,7 +37,6 @@ class Weather:
         dt = datetime.strptime(date_str, from_format)
         return dt.strftime(to_format)
 
-
     def get_weather_message(self, weather_data):
         channel = weather_data["query"]["results"]["channel"]
         bubble = {

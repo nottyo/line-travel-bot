@@ -1,7 +1,10 @@
 from flask import Flask, request, abort, jsonify
 from weather import Weather
+from places import Places
 import os
 import sys
+import json
+import errno
 from linebot import (
     LineBotApi, WebhookHandler
 )
@@ -22,23 +25,36 @@ from linebot.models import (
     UnfollowEvent, FollowEvent, JoinEvent, LeaveEvent, BeaconEvent,
     FlexSendMessage, BubbleContainer, ImageComponent, BoxComponent,
     TextComponent, SpacerComponent, IconComponent, ButtonComponent,
-    SeparatorComponent, CarouselContainer, QuickReply, QuickReplyButton, LocationAction
+    SeparatorComponent, CarouselContainer, QuickReply, QuickReplyButton, LocationAction, CameraAction,
+    CameraRollAction
 )
 
 app = Flask(__name__)
 weather = Weather()
-
+places = Places()
 channel_secret = os.getenv('LINE_CHANNEL_SECRET', None)
 channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN', None)
+
 if channel_secret is None:
     print('Specify LINE_CHANNEL_SECRET as environment variable.')
     sys.exit(1)
 if channel_access_token is None:
     print('Specify LINE_CHANNEL_ACCESS_TOKEN as environment variable.')
     sys.exit(1)
+static_tmp_path = os.path.join(os.path.dirname(__file__), 'static', 'tmp')
 
 line_bot_api = LineBotApi(channel_access_token)
 handler = WebhookHandler(channel_secret)
+
+
+def make_static_tmp_dir():
+    try:
+        os.makedirs(static_tmp_path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(static_tmp_path):
+            pass
+        else:
+            raise
 
 
 @app.route("/callback", methods=['POST'])
@@ -77,13 +93,86 @@ def health_check():
 def handle_location_message(event):
     weather_data = weather.get_weather_forecast(event.message.latitude, event.message.longitude)
     bubble_container = weather.get_weather_message(weather_data)
-    line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Weather Forecast",
-                                                                  contents=bubble_container))
+    messages = []
+    messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=bubble_container))
+    messages.append(TextSendMessage(text='Do you want to find places nearby this location?', quick_reply=
+                                    QuickReply(
+                                        items=[
+                                            QuickReplyButton(action=PostbackAction(label='Restaurant',
+                                                                    data='place_search?lat={0}&lng={1}&type=restaurant'
+                                                                    .format(event.message.latitude,
+                                                                    event.message.longitude))),
+                                            QuickReplyButton(action=PostbackAction(label='Lodging',
+                                                                   data='place_search?lat={0}&lng={1}&type=lodging'
+                                                                   .format(event.message.latitude,
+                                                                           event.message.longitude))),
+                                            QuickReplyButton(action=PostbackAction(label='Cafe',
+                                                                   data='place_search?lat={0}&lng={1}&type=cafe'
+                                                                   .format(event.message.latitude,
+                                                                           event.message.longitude))),
+                                            QuickReplyButton(action=PostbackAction(label='Train Station',
+                                                                   data='place_search?lat={0}&lng={1}&type=train_station'
+                                                                   .format(event.message.latitude,
+                                                                           event.message.longitude))),
+                                            QuickReplyButton(action=PostbackAction(label='Shopping Mall',
+                                                                   data='place_search?lat={0}&lng={1}&type=shopping_mall'
+                                                                   .format(event.message.latitude,
+                                                                           event.message.longitude))),
+                                            QuickReplyButton(action=PostbackAction(label='All',
+                                                                   data='place_search?lat={0}&lng={1}&type=all'
+                                                                   .format(event.message.latitude,
+                                                                           event.message.longitude))),
+                                            QuickReplyButton(action=MessageAction(label='No Thanks.', text='No Thanks'))
+                                        ]
+                                    )))
+    line_bot_api.reply_message(event.reply_token, messages=messages)
 
 
 @handler.add(PostbackEvent)
 def handle_postback_event(event):
     data = event.postback.data
+    print('postback data:{}'.format(data))
+    if 'place_search?' in data:
+        query_params = data.split('?')[1]
+        lat = float(query_params.split('&')[0].split('=')[1])
+        lng = float(query_params.split('&')[1].split('=')[1])
+        type = query_params.split('&')[2].split('=')[1]
+        if type == 'all':
+            places_data = places.get_nearby_places(lat, lng)
+        else:
+            places_data = places.get_nearby_places(lat, lng, type)
+        messages = []
+        if isinstance(places_data, str):
+            messages.append(TextSendMessage(text=places_data))
+            messages.append(TextSendMessage(text='Still want to find another nearby location?', quick_reply=
+            QuickReply(
+                items=[
+                    QuickReplyButton(action=MessageAction(label='No Thanks.', text='No Thanks')),
+                    QuickReplyButton(action=PostbackAction(label='Restaurant',
+                                                           data='place_search?lat={0}&lng={1}&type=restaurant'
+                                                           .format(lat, lng))),
+                    QuickReplyButton(action=PostbackAction(label='Lodging',
+                                                           data='place_search?lat={0}&lng={1}&type=lodging'
+                                                           .format(lat, lng))),
+                    QuickReplyButton(action=PostbackAction(label='Cafe',
+                                                           data='place_search?lat={0}&lng={1}&type=cafe'
+                                                           .format(lat, lng))),
+                    QuickReplyButton(action=PostbackAction(label='Train Station',
+                                                           data='place_search?lat={0}&lng={1}&type=train_station'
+                                                           .format(lat, lng))),
+                    QuickReplyButton(action=PostbackAction(label='Shopping Mall',
+                                                           data='place_search?lat={0}&lng={1}&type=shopping_mall'
+                                                           .format(lat, lng))),
+                    QuickReplyButton(action=PostbackAction(label='All',
+                                                           data='place_search?lat={0}&lng={1}&type=all'
+                                                           .format(lat, lng)))
+                ]
+            )))
+            line_bot_api.reply_message(event.reply_token, messages=messages)
+        else:
+            messages.append(FlexSendMessage(alt_text='Places', contents=places_data))
+            line_bot_api.reply_message(event.reply_token, messages)
+
     if 'weather=' in data:
         weather_data = weather.get_weather_by_place(data.split("=")[1])
         bubble_container = weather.get_weather_message(weather_data)
@@ -128,4 +217,5 @@ def handle_text_message(event):
 
 
 if __name__ == '__main__':
+    make_static_tmp_dir()
     app.run(debug=True, port=5000)
