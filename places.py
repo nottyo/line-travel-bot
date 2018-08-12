@@ -31,6 +31,7 @@ class Places:
                     f.write(chunk)
         dist_name = os.path.basename(file_name)
         photo_url = request.host_url.replace('http', 'https') + os.path.join('static', 'tmp', dist_name)
+        print(photo_url)
         return photo_url
 
     def _format_operating_hours(self, operating_hours):
