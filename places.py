@@ -24,6 +24,8 @@ class Places:
     def get_photos(self, photo_ref, id):
         ext = 'jpg'
         file_name = static_tmp_path + '/' + id + '.' + ext
+        if os.path.isfile(file_name):
+            return request.host_url.replace('http:', 'https:') + os.path.join('static', 'tmp', os.path.basename(file_name))
         with open(file_name, 'wb') as f:
             for chunk in gmaps.places_photo(photo_ref, max_width=640):
                 if chunk:

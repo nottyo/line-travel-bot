@@ -96,36 +96,6 @@ def handle_location_message(event):
     bubble_container = weather.get_weather_message(weather_data)
     messages = []
     messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=bubble_container))
-    messages.append(TextSendMessage(text='Do you want to find places nearby this location?', quick_reply=
-                                    QuickReply(
-                                        items=[
-                                            QuickReplyButton(action=PostbackAction(label='Restaurant',
-                                                                    data='place_search?lat={0}&lng={1}&type=restaurant'
-                                                                    .format(event.message.latitude,
-                                                                    event.message.longitude))),
-                                            QuickReplyButton(action=PostbackAction(label='Lodging',
-                                                                   data='place_search?lat={0}&lng={1}&type=lodging'
-                                                                   .format(event.message.latitude,
-                                                                           event.message.longitude))),
-                                            QuickReplyButton(action=PostbackAction(label='Cafe',
-                                                                   data='place_search?lat={0}&lng={1}&type=cafe'
-                                                                   .format(event.message.latitude,
-                                                                           event.message.longitude))),
-                                            QuickReplyButton(action=PostbackAction(label='Train Station',
-                                                                   data='place_search?lat={0}&lng={1}&type=train_station'
-                                                                   .format(event.message.latitude,
-                                                                           event.message.longitude))),
-                                            QuickReplyButton(action=PostbackAction(label='Shopping Mall',
-                                                                   data='place_search?lat={0}&lng={1}&type=shopping_mall'
-                                                                   .format(event.message.latitude,
-                                                                           event.message.longitude))),
-                                            QuickReplyButton(action=PostbackAction(label='All',
-                                                                   data='place_search?lat={0}&lng={1}&type=all'
-                                                                   .format(event.message.latitude,
-                                                                           event.message.longitude))),
-                                            QuickReplyButton(action=MessageAction(label='No Thanks.', text='No Thanks'))
-                                        ]
-                                    )))
     line_bot_api.reply_message(event.reply_token, messages=messages)
 
 
@@ -145,30 +115,6 @@ def handle_postback_event(event):
         messages = []
         if isinstance(places_data, str):
             messages.append(TextSendMessage(text=places_data))
-            messages.append(TextSendMessage(text='Still want to find another nearby location?', quick_reply=
-            QuickReply(
-                items=[
-                    QuickReplyButton(action=MessageAction(label='No Thanks.', text='No Thanks')),
-                    QuickReplyButton(action=PostbackAction(label='Restaurant',
-                                                           data='place_search?lat={0}&lng={1}&type=restaurant'
-                                                           .format(lat, lng))),
-                    QuickReplyButton(action=PostbackAction(label='Lodging',
-                                                           data='place_search?lat={0}&lng={1}&type=lodging'
-                                                           .format(lat, lng))),
-                    QuickReplyButton(action=PostbackAction(label='Cafe',
-                                                           data='place_search?lat={0}&lng={1}&type=cafe'
-                                                           .format(lat, lng))),
-                    QuickReplyButton(action=PostbackAction(label='Train Station',
-                                                           data='place_search?lat={0}&lng={1}&type=train_station'
-                                                           .format(lat, lng))),
-                    QuickReplyButton(action=PostbackAction(label='Shopping Mall',
-                                                           data='place_search?lat={0}&lng={1}&type=shopping_mall'
-                                                           .format(lat, lng))),
-                    QuickReplyButton(action=PostbackAction(label='All',
-                                                           data='place_search?lat={0}&lng={1}&type=all'
-                                                           .format(lat, lng)))
-                ]
-            )))
             line_bot_api.reply_message(event.reply_token, messages=messages)
         else:
             messages.append(FlexSendMessage(alt_text='Places', contents=places_data))
