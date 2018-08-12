@@ -8,12 +8,12 @@ from linebot.models import (
     CarouselContainer, BubbleContainer
 )
 
-gmaps_api_key = os.getenv('GMAPS_API_KEY', None)
-if gmaps_api_key is None:
-    print('Specify GMAPS_API_KEY as environment variable')
-    sys.exit(1)
-
-gmaps = googlemaps.Client(key=gmaps_api_key)
+# gmaps_api_key = os.getenv('GMAPS_API_KEY', None)
+# if gmaps_api_key is None:
+#     print('Specify GMAPS_API_KEY as environment variable')
+#     sys.exit(1)
+#
+# gmaps = googlemaps.Client(key=gmaps_api_key)
 static_tmp_path = os.path.join(os.path.dirname(__file__), 'static', 'tmp')
 
 lang = 'en'
