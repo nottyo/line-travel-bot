@@ -120,6 +120,13 @@ class Weather:
                                 "text": "Humidity: {0}%".format(channel["atmosphere"]["humidity"]),
                                 "size": "xs",
                                 "align": "center"
+                            },
+                            {
+                                "type": "text",
+                                "text": "SunRise/Set: {0} / {1}".format(channel["astronomy"]["sunrise"],
+                                                                           channel["astronomy"]["sunset"]),
+                                "size": "xs",
+                                "align": "center"
                             }
                         ]
                     },
@@ -136,7 +143,7 @@ class Weather:
             }
         }
         bubble_forecast_contents = bubble["body"]["contents"][3]["contents"]
-        for index in range(1, 6):
+        for index in range(1, 8):
             data = channel["item"]["forecast"][index]
             dt = self._format_date(data["date"])
             bubble_forecast_contents.append(
