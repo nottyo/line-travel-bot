@@ -4,6 +4,7 @@ from places import Places
 import os
 import sys
 import json
+import re
 import errno
 from linebot import (
     LineBotApi, WebhookHandler
@@ -92,7 +93,8 @@ def health_check():
 
 @handler.add(MessageEvent, message=LocationMessage)
 def handle_location_message(event):
-    weather_data = weather.get_weather_forecast(event.message.latitude, event.message.longitude)
+    latlng = '{0} {1}'.format(event.message.latitude, event.message.longitude)
+    weather_data = weather.get_weather_data(latlng)
     bubble_container = weather.get_weather_message(weather_data)
     messages = []
     messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=bubble_container))
@@ -121,7 +123,7 @@ def handle_postback_event(event):
             line_bot_api.reply_message(event.reply_token, messages)
 
     if 'weather=' in data:
-        weather_data = weather.get_weather_by_place(data.split("=")[1])
+        weather_data = weather.get_weather_data(data.split("=")[1])
         bubble_container = weather.get_weather_message(weather_data)
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Weather Forecast",
                                                                       contents=bubble_container))
@@ -162,8 +164,12 @@ def handle_text_message(event):
                                         quick_reply=quick_reply)
         line_bot_api.reply_message(event.reply_token, messages=reply_message)
 
-    if 'weather in ' in text.lower():
-        weather_data = weather.get_weather_by_place(text.split(" ")[2])
+    m = re.match('weather in (.*)', text.lower())
+
+    if m is not None:
+        place_name = m.group(1)
+        weather_data = weather.get_weather_data(place_name)
+        print(json.dumps(weather_data))
         if isinstance(weather_data, str):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=weather_data))
         else:

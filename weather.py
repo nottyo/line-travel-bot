@@ -3,50 +3,84 @@ import requests
 import os
 import sys
 import json
+import pytz
 from linebot.models import (
     BubbleContainer
 )
 
-base_url = 'https://query.yahooapis.com/v1/public/yql'
-weather_forecast_hourly_url = 'https://api.weatherbit.io/v2.0/forecast/hourly'
+weather_forecast_url = 'https://api.weatherbit.io/v2.0'
+geocode_api_url = 'https://api.opencagedata.com/geocode/v1/json'
 
 weather_api_key = os.getenv('WEATHER_API_KEY', None)
+geocode_api_key = os.getenv('GEOCODE_API_KEY', None)
 if weather_api_key is None:
     print('Specify WEATHER_API_KEY in environment variable')
+    sys.exit(1)
+
+if geocode_api_key is None:
+    print('Specify GEOCODE_API_KEY in environment variable')
     sys.exit(1)
 
 
 class Weather:
 
-    def get_weather_forecast(self, lat, lng):
-        yql = 'select * from weather.forecast where woeid in (select woeid from geo.places ' \
-              'where text=\"({0}, {1})\") and u=\"c\"'.format(str(lat), str(lng))
+    # resolve location by lat lng or find lat,lng by location_name
+    def _resolve_location_latlng(self, location_or_latlng):
         params = {
-            'q': yql,
-            'format': 'json'
+            'q': location_or_latlng,
+            'abbrv': '1',
+            'key': geocode_api_key
         }
-        response = requests.get(base_url, params=params)
+        response = requests.get(geocode_api_url, params=params)
         return response.json()
 
-    def get_weather_by_place(self, place_name):
-        yql = 'select * from weather.forecast where woeid in (select woeid from geo.places(1) ' \
-              'where text=\"{0}\") and u=\"c\"'.format(str(place_name))
+    def get_current_weather(self, lat, lng):
         params = {
-            'q': yql,
-            'format': 'json'
+            'lat': lat,
+            'lon': lng,
+            'key': weather_api_key
         }
-        response = requests.get(base_url, params=params)
-        resp_json = response.json()
-        if resp_json['query']['results'] is None or 'item' not in resp_json["query"]["results"]["channel"]:
-            return "I couldn't find weather from your place: {}".format(place_name)
+        response = requests.get(weather_forecast_url + '/current', params=params)
         return response.json()
 
-    def _format_date(self, date_str, from_format="%d %b %Y", to_format="%a, %d %b"):
+    def get_weather_forecast_daily(self, lat, lng):
+        params = {
+            'lat': lat,
+            'lon': lng,
+            'key': weather_api_key
+        }
+        response = requests.get(weather_forecast_url + '/forecast/daily', params=params)
+        return response.json()
+
+    def get_weather(self, lat, lng):
+        current_data = self.get_current_weather(lat, lng)
+        daily_data = self.get_weather_forecast_daily(lat, lng)
+        result = dict()
+        result['current'] = current_data['data'][0]
+        result['daily'] = daily_data['data']
+        return result
+
+    def get_weather_data(self, place_name_or_latlng):
+        result = self._resolve_location_latlng(place_name_or_latlng)
+        if len(result['results']) == 0:
+            return "I couldn't find weather from your place or lat/lng: {}".format(place_name_or_latlng)
+        geometry = result['results'][0]['geometry']
+        weather_data = self.get_weather(geometry['lat'], geometry['lng'])
+        weather_data['address'] = result['results'][0]
+        return weather_data
+
+    def _format_date(self, date_str, from_format="%Y-%m-%d", to_format="%a, %-d %b"):
         dt = datetime.strptime(date_str, from_format)
         return dt.strftime(to_format)
 
+    # convert datetime from utc to local time
+    def convert_time(self, dt_str, tz_str, from_format, to_format):
+        dt = datetime.strptime(dt_str, from_format)
+        local_tz = pytz.timezone(tz_str)
+        dt = pytz.utc.localize(dt)
+        return dt.astimezone(local_tz).strftime(to_format)
+
     def get_weather_message(self, weather_data):
-        channel = weather_data["query"]["results"]["channel"]
         bubble = {
             "type": "bubble",
             "styles": {
@@ -74,15 +108,18 @@ class Weather:
                                     },
                                     {
                                         "type": "text",
-                                        "text": "{0}, {1}".format(channel["location"]["city"],
-                                                                  channel["location"]["country"]),
-                                        "size": "sm"
+                                        "text": "{0} {1}".format(weather_data["address"]["formatted"],
+                                                                 weather_data["address"]["annotations"]["flag"]),
+                                        "size": "sm",
+                                        "wrap": True
                                     }
                                 ]
                             },
                             {
                                 "type": "text",
-                                "text": channel["lastBuildDate"],
+                                "text": self.convert_time(weather_data["current"]["ob_time"],
+                                                          weather_data["current"]['timezone'],
+                                                          '%Y-%m-%d %H:%M', '%a, %d %B %H:%M %p %z'),
                                 "size": "xxs"
                             }
                         ]
@@ -94,48 +131,50 @@ class Weather:
                         "contents": [
                             {
                                 "type": "text",
-                                "text": "{0}º{1}".format(channel["item"]["condition"]["temp"],
-                                                         channel["units"]["temperature"]),
+                                "text": "{0}º".format(int(weather_data["current"]['temp'])),
                                 "size": "5xl",
                                 "align": "center",
                                 "action": {
                                     "type": "postback",
-                                    "data": "weather_hourly?lat={0}&lng={1}".format(channel["item"]["lat"],
-                                                                                    channel["item"]["long"])
+                                    "data": "weather_hourly?lat={0}&lng={1}".format(
+                                        weather_data["address"]["geometry"]["lat"],
+                                        weather_data["address"]["geometry"][
+                                            "lng"])
                                 }
                             },
                             {
                                 "type": "text",
-                                "text": channel["item"]["condition"]["text"],
+                                "text": weather_data["current"]["weather"]["description"],
                                 "weight": "bold",
+                                "size": "lg",
+                                "align": "center"
+                            },
+                            {
+                                "type": "text",
+                                "text": "{0}º / {1}º".format(int(weather_data["daily"][0]["min_temp"]),
+                                                             int(weather_data["daily"][0]["max_temp"])),
                                 "size": "sm",
                                 "align": "center"
                             },
                             {
                                 "type": "text",
-                                "text": "{0}º{1} / {2}º{3}".format(channel["item"]["forecast"][0]["low"],
-                                                                   channel["units"]["temperature"],
-                                                                   channel["item"]["forecast"][0]["high"],
-                                                                   channel["units"]["temperature"]),
-                                "size": "sm",
-                                "align": "center"
-                            },
-                            {
-                                "type": "text",
-                                "text": "Wind: {0} {1}".format(channel["wind"]["speed"], channel["units"]["speed"]),
+                                "text": "Feels Like: {0}º".format(int(weather_data["current"]["app_temp"])),
                                 "size": "xs",
                                 "align": "center"
                             },
                             {
                                 "type": "text",
-                                "text": "Humidity: {0}%".format(channel["atmosphere"]["humidity"]),
+                                "text": "Humidity: {0}%".format(weather_data["current"]["rh"]),
                                 "size": "xs",
                                 "align": "center"
                             },
                             {
                                 "type": "text",
-                                "text": "SunRise/Set: {0} / {1}".format(channel["astronomy"]["sunrise"],
-                                                                        channel["astronomy"]["sunset"]),
+                                "text": "SunRise/Set: {0} / {1}".format(
+                                    self.convert_time(weather_data["current"]["sunrise"],
+                                                      weather_data["current"]['timezone'], '%H:%M', '%I:%M %p'),
+                                    self.convert_time(weather_data["current"]["sunset"],
+                                                      weather_data["current"]['timezone'], '%H:%M', '%I:%M %p')),
                                 "size": "xs",
                                 "align": "center"
                             }
@@ -147,37 +186,51 @@ class Weather:
                     {
                         "type": "box",
                         "layout": "vertical",
-                        "spacing": "md",
+                        "spacing": "xs",
                         "contents": []
                     }
                 ]
             }
         }
         bubble_forecast_contents = bubble["body"]["contents"][3]["contents"]
-        for index in range(1, 8):
-            data = channel["item"]["forecast"][index]
-            dt = self._format_date(data["date"])
+        for index in range(1, 6):
+            data = weather_data["daily"][index]
             bubble_forecast_contents.append(
                 {
                     "type": "box",
                     "layout": "horizontal",
+                    "spacing": "xs",
                     "contents": [
                         {
-                            "type": "text",
-                            "text": dt,
+                            "type": "box",
+                            "layout": "vertical",
+                            "flex": 3,
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": self._format_date(data["datetime"]),
+                                    "size": "xs"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": data["weather"]["description"],
+                                    "size": "xs"
+                                }
+                            ]
+                        },
+                        {
+                            "type": "image",
+                            "url": "https://www.weatherbit.io/static/img/icons/{0}.png".format(
+                                data["weather"]["icon"]),
                             "size": "xxs",
-                            "flex": 3
+                            "flex": 2
                         },
                         {
                             "type": "text",
-                            "text": data["text"],
-                            "size": "xxs",
-                            "flex": 6
-                        },
-                        {
-                            "type": "text",
-                            "text": "{0}º/{1}º".format(data["low"], data["high"]),
-                            "size": "xxs",
+                            "text": "{0}º/{1}º".format(int(data["min_temp"]), int(data["max_temp"])),
+                            "size": "sm",
+                            "align": "end",
+                            "gravity": "center",
                             "flex": 2
                         }
                     ]
@@ -196,7 +249,7 @@ class Weather:
             'lon': lng,
             'key': weather_api_key
         }
-        response = requests.get(weather_forecast_hourly_url, params=params)
+        response = requests.get(weather_forecast_url + '/forecast/hourly', params=params)
         return response.json()
 
     def get_weather_forecast_hourly_data(self, hourly_data, limit=10):
@@ -316,7 +369,7 @@ class Weather:
                         {
                             "type": "text",
                             "size": "xs",
-                            "text": "{0}º".format(data[index]['temp']),
+                            "text": "{0}º".format(int(data[index]['temp'])),
                             "gravity": "center",
                             "align": "center",
                             "flex": 2
@@ -324,7 +377,7 @@ class Weather:
                         {
                             "type": "text",
                             "size": "xs",
-                            "text": "{0}º".format(data[index]['app_temp']),
+                            "text": "{0}º".format(int(data[index]['app_temp'])),
                             "gravity": "center",
                             "align": "center",
                             "flex": 3
@@ -338,3 +391,12 @@ class Weather:
                 }
             )
         return BubbleContainer.new_from_json_dict(bubble)
+
+
+if __name__ == '__main__':
+    dt_str = '2018-09-08 10:49'
+    from_format = '%Y-%m-%d %H:%M'
+    to_format = '%a, %d %B %H:%M %p %z'
+    tz_str = 'Asia/Bangkok'
+    weather = Weather()
+    print(weather.convert_time(dt_str, tz_str, from_format, to_format))
