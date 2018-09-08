@@ -125,6 +125,15 @@ def handle_postback_event(event):
         bubble_container = weather.get_weather_message(weather_data)
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Weather Forecast",
                                                                       contents=bubble_container))
+    if 'weather_hourly?' in data:
+        latlng = data.split('?')[1]
+        lat, lng = latlng.split('&')
+        lat = lat.split('=')[1]
+        lng = lng.split('=')[1]
+        forecast_hourly_data = weather.get_weather_forcast_hourly(lat, lng)
+        bubble_container = weather.get_weather_forecast_hourly_data(forecast_hourly_data)
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Weather Forecast Hourly",
+                                                                      contents=bubble_container))
 
 
 @handler.add(MessageEvent, message=TextMessage)
