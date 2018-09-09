@@ -204,7 +204,7 @@ class Weather:
                         {
                             "type": "box",
                             "layout": "vertical",
-                            "flex": 3,
+                            "flex": 4,
                             "contents": [
                                 {
                                     "type": "text",
@@ -214,7 +214,7 @@ class Weather:
                                 {
                                     "type": "text",
                                     "text": data["weather"]["description"],
-                                    "size": "xs"
+                                    "size": "xxs"
                                 }
                             ]
                         },
