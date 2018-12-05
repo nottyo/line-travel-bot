@@ -1,6 +1,7 @@
 from flask import Flask, request, abort, jsonify
 from weather import Weather
 from places import Places
+from flight_api import FlightApi
 import os
 import sys
 import json
@@ -33,6 +34,7 @@ from linebot.models import (
 app = Flask(__name__)
 weather = Weather()
 places = Places()
+flight_api = FlightApi()
 channel_secret = os.getenv('LINE_CHANNEL_SECRET', None)
 channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN', None)
 
@@ -177,8 +179,20 @@ def handle_text_message(event):
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Weather Forecast",
                                                                           contents=bubble_container))
 
+    n = re.match('flight (.*)', text.lower())
+    if n is not None:
+        latest_flight = flight_api.get_latest_flight(n.group(1).upper())
+        if latest_flight is not None:
+            flight_metadata = flight_api.get_flight_metadata(latest_flight['flight_number'], latest_flight['adshex'])
+            if flight_metadata['success'] is True:
+                flight_bubble = flight_api.create_flight_message(latest_flight['flight_number'], latest_flight['adshex'], flight_metadata['payload'])
+                print(flight_bubble)
+                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight Information",
+                                                                          contents=flight_bubble))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I can\'t find your flight: {}. Please try another flight number'.format(n.group(1).upper())))
+
 
 make_static_tmp_dir()
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
