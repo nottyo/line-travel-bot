@@ -487,4 +487,6 @@ class FlightApi(object):
                 )
             bubble_container = BubbleContainer.new_from_json_dict(bubble)
             carousel_container.contents.append(bubble)
+            if len(carousel_container.contents) == 7:
+                break 
         return carousel_container
