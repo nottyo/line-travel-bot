@@ -13,8 +13,15 @@ from linebot.models import (
 
 api_host = os.getenv('FLIGHT_API_HOST', None)
 flight_route_api_host = os.getenv('FLIGHT_ROUTE_API', None)
+image_host = os.getenv('IMAGE_URL', None)
 hmp_format = '%H:%M %p'
 hm_format = '%H:%M'
+
+with open('airports.json') as f:
+    airports = json.load(f)
+
+with open('emoji_flags.json') as cc:
+    country_code = json.load(cc)
 
 class FlightApi(object):
 
@@ -26,6 +33,17 @@ class FlightApi(object):
         if resp_json['flights'] is not False and len(resp_json['flights']) > 0:
             return resp_json['flights'][0]
         return None
+
+    def get_country_code_flag(self, code):
+        for country in country_code:
+            if country['code'] == code:
+                return country['emoji']
+
+    def get_airport_name_from_code(self, iata):
+        for airport in airports:
+            if airport['iata'] == iata:
+                airport['country_flag'] = self.get_country_code_flag(airport['iso'])
+                return airport
     
     def get_flight_metadata(self, flight_no, adshex):
         url = '{0}/api/api.php'.format(api_host)
@@ -46,6 +64,11 @@ class FlightApi(object):
         convert_time = time.strftime(format, time.gmtime(epoch))
         if next_day is True:
             convert_time += ' (+1)'
+        return convert_time
+    
+    def _convert_epoch_withoffset(self, format, epoch, offset):
+        _time = time.gmtime(epoch + offset)
+        convert_time = time.strftime(format, _time)
         return convert_time
 
     def create_flight_message(self, flight_no, adshex, flight_metadata):
@@ -150,7 +173,7 @@ class FlightApi(object):
         else:
             bubble['hero'] = {
                 "type": "image",
-                "url": "https://flightstat.planefinder.net/v1/getImage.php?airlineCode={0}&aircraftType={1}".format(flight_metadata['aircraftData']['airlineICAO'], flight_metadata['aircraftData']['typeCode']),
+                "url": "{0}/v1/getImage.php?airlineCode={1}&aircraftType={2}".format(image_host, flight_metadata['aircraftData']['airlineICAO'], flight_metadata['aircraftData']['typeCode']),
                 "size": "full",
                 "aspectRatio": "1.91:1",
                 "aspectMode": "fit",
@@ -259,9 +282,9 @@ class FlightApi(object):
                     ]
                     },
                     {
-                    "type": "image",
-                    "url": "https://flightstat.planefinder.net/v2/getLogo3x.php?airlineCode={0}&requestThumb=0&hex={1}".format(flight_metadata['aircraftData']['airlineICAO'], adshex),
-                    "size": "xs"
+                        "type": "image",
+                        "url": "{0}/v2/getLogo3x.php?airlineCode={1}&requestThumb=0&hex={2}".format(image_host, flight_metadata['aircraftData']['airlineICAO'], adshex),
+                        "size": "xs"
                     }
                 ]
             },
@@ -355,6 +378,16 @@ class FlightApi(object):
         if result is not None:
             return result['type']
         return 'N/A'
+    
+    def get_airport_code(self, query):
+        url = '{0}/data/endpoints/search_ajax.php'.format(api_host)
+        params = {
+            'searchText': query,
+            'key': 'PF2202'
+        }
+        response = requests.get(url, params=params)
+        resp_json = response.json()
+        return resp_json['airports'] if len(resp_json['airports']) > 0 else None
 
     def get_flight_by_route(self, origin, destination):
         print('ORIGIN: {0}, DESTINATION: {1}'.format(origin, destination))
@@ -490,3 +523,279 @@ class FlightApi(object):
             if len(carousel_container.contents) == 7:
                 break 
         return carousel_container
+    
+    def get_airport_data(self, airport_iata, limit=15):
+        url = '{0}/api/api.php'.format(api_host)
+        params = {
+            'r': 'airport',
+            'airportCode': airport_iata,
+            '_': int(round(time.time() * 1000))
+        }
+        response = requests.get(url, params=params)
+        resp_json = response.json()['payload']
+        if resp_json['departures'] is not None and resp_json['arrivals'] is not None:
+            result = {}
+            airport = self.get_airport_name_from_code(airport_iata)
+            result['departure_title'] = '{0} {1} ({2})'.format(airport['name'].upper(), airport['country_flag'], airport_iata)
+            result['arrival_title'] = '{0} {1} ({2})'.format(airport['name'].upper(), airport['country_flag'], airport_iata)
+            result['departures'] = []
+            result['arrivals'] = []
+            for index in range(0, limit):
+                departure = resp_json['departures'][index]
+                departure_time = departure['estimatedDepartureTime'] if departure['estimatedDepartureTime'] is not None else departure['scheduledDepartureTime']
+                destination_airport = self.get_airport_name_from_code(departure['arrApt'])
+                result['departures'].append(
+                    {
+                        'time': self._convert_epoch_withoffset('%H:%M', departure_time, departure['offset']),
+                        'destination': '{0} {1}'.format(destination_airport['country_flag'], destination_airport['name'].upper()),
+                        'destination_code': destination_airport['iata'],
+                        'flight_no': departure['flightNumber']
+                    }
+                )
+                arrival = resp_json['arrivals'][index]
+                arrival_time = arrival['scheduledArrivalTime']
+                origin_airport = self.get_airport_name_from_code(arrival['depApt'])
+                result['arrivals'].append(
+                    {
+                        'time': self._convert_epoch_withoffset('%H:%M', arrival_time, arrival['offset']),
+                        'origin': '{0} {1}'.format(origin_airport['country_flag'], origin_airport['name'].upper()),
+                        'origin_code': origin_airport['iata'],
+                        'flight_no': arrival['flightNumber']
+                    }
+                )    
+            return result
+        return None
+        
+    def create_airport_message(self, airport_data):
+        carousel_container = CarouselContainer()
+        departures_bubble = {
+            "type": "bubble",
+            "styles": {
+                "header": {
+                    "backgroundColor": "#FFF800"
+                },
+                "body": {
+                    "backgroundColor": "#000000"
+                }
+            },
+            "direction": "ltr",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": 'DEPARTURES',
+                        "align": "start",
+                        "size": "lg",
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": airport_data['departure_title'],
+                        "size": "xs",
+                        "align": "start"
+                    }
+                ]
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "Time",
+                                "flex": 1,
+                                "size": "xs",
+                                "align": "start",
+                                "color": "#FFFFFF"
+                            },
+                            {
+                                "type": "text",
+                                "text": "Destination",
+                                "flex": 2,
+                                "size": "xs",
+                                "align": "start",
+                                "color": "#FFFFFF"
+                            },
+                            {
+                                "type": "text",
+                                "text": "Flight",
+                                "size": "xs",
+                                "align": "end",
+                                "color": "#FFFFFF"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "separator"
+                    }
+                ]
+            }
+        }
+        for departure in airport_data['departures']:
+            departures_bubble['body']['contents'].append(
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": departure['time'],
+                            "flex": 1,
+                            "size": "xs",
+                            "align": "start",
+                            "color": "#FFFFFF"
+                        },
+                        {
+                            "type": "text",
+                            "text": departure['destination'],
+                            "flex": 2,
+                            "size": "xxs",
+                            "align": "start",
+                            "color": "#FFFFFF",
+                            "wrap": True,
+                            "action": {
+                                "type": "postback",
+                                "data": "airport={0}".format(departure['destination_code'])
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": departure['flight_no'],
+                            "size": "xs",
+                            "align": "end",
+                            "color": "#FFFFFF",
+                            "action": {
+                                "type": "postback",
+                                "data": "flight_info={0}".format(departure['flight_no'])
+                            }
+                        }
+                    ]
+                }
+            )
+        arrivals_bubble = {
+            "type": "bubble",
+            "styles": {
+                "header": {
+                    "backgroundColor": "#9FE9FF"
+                },
+                "body": {
+                    "backgroundColor": "#000000"
+                }
+            },
+            "direction": "ltr",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": "ARRIVALS",
+                        "align": "start",
+                        "size": "lg",
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": airport_data['arrival_title'],
+                        "align": "start",
+                        "size": "xs"
+                    }
+                ]
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "Time",
+                                "flex": 1,
+                                "size": "xs",
+                                "align": "start",
+                                "color": "#FFFFFF"
+                            },
+                            {
+                                "type": "text",
+                                "text": "Origin",
+                                "flex": 2,
+                                "size": "xs",
+                                "align": "start",
+                                "color": "#FFFFFF"
+                            },
+                            {
+                                "type": "text",
+                                "text": "Flight",
+                                "size": "xs",
+                                "align": "end",
+                                "color": "#FFFFFF"
+                            }
+                        ]
+                    },
+                    {
+                        "type": "separator"
+                    }
+                ]
+            }
+        }
+        for arrival in airport_data['arrivals']:
+            arrivals_bubble['body']['contents'].append(
+                {
+                    "type": "box",
+                    "layout": "horizontal",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": arrival['time'],
+                            "flex": 1,
+                            "size": "xs",
+                            "align": "start",
+                            "color": "#FFFFFF"
+                        },
+                        {
+                            "type": "text",
+                            "text": arrival['origin'],
+                            "flex": 2,
+                            "size": "xxs",
+                            "align": "start",
+                            "color": "#FFFFFF",
+                            "wrap": True,
+                            "action": {
+                                "type": "postback",
+                                "data": "airport={0}".format(arrival['origin_code'])
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": arrival['flight_no'],
+                            "size": "xs",
+                            "align": "end",
+                            "color": "#FFFFFF",
+                            "action": {
+                                "type": "postback",
+                                "data": "flight_info={0}".format(arrival['flight_no'])
+                            }
+                        }
+                    ]
+                }
+            )
+        departure_container = BubbleContainer.new_from_json_dict(departures_bubble)
+        arrival_container = BubbleContainer.new_from_json_dict(arrivals_bubble)
+        carousel_container.contents.append(departure_container)
+        carousel_container.contents.append(arrival_container)
+        return carousel_container
+
+if __name__ == "__main__":
+    flight_api = FlightApi()
+    print(flight_api._convert_epoch_withoffset('%H:%M', 1544272200, -21600))

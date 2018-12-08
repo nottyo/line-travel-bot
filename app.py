@@ -149,6 +149,15 @@ def handle_postback_event(event):
                 line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight Information",
                                                                           contents=flight_bubble))
 
+    if 'airport' in data:
+        airport_code = data.split('=')[1]
+        airport_name = flight_api.get_airport_name_from_code(airport_code)
+        print('airport_name: {0}'.format(airport_name))
+        if airport_name is not None:
+            airport_data = flight_api.get_airport_data(airport_code)
+            airport_message = flight_api.create_airport_message(airport_data)
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Airport Information",
+                                                                          contents=airport_message))
 
 
 @handler.add(MessageEvent, message=TextMessage)
@@ -212,6 +221,26 @@ def handle_text_message(event):
             line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight {0} Route Info".format(text),
                                                                           contents=carouesel_container))
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, There is no flight for "{}" route.'.format(text)))
+    
+    q = re.match('airport (.*)', text.lower())
+    if q is not None:
+        text = q.group(1).lower()
+        airports = flight_api.get_airport_code(text)
+        if airports is not None:
+            quick_reply_items = []
+            for airport in airports:
+                airport_name = (airport['title'][:14] + ' ({0})'.format(airport['url'].split('/')[-1])) if len(airport['title']) > 14 else airport['title'] + ' ({0})'.format(airport['url'].split('/')[-1])
+                quick_reply_items.append(
+                    {
+                        "type": "action",
+                        "action": {
+                            "type": "postback",
+                            "label": airport_name,
+                            "data": "airport={0}".format(airport['url'].split('/')[-1])
+                        }
+                    }
+                )
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Here are possible airports', quick_reply=QuickReply(items=quick_reply_items)))
 
 
 make_static_tmp_dir()
