@@ -1,11 +1,18 @@
 import requests
 import time
 import os
+import datetime
+import string
+import random
+import json
+from datetime import timedelta
 from linebot.models import (
-    BubbleContainer
+    BubbleContainer,
+    CarouselContainer
 )
 
 api_host = os.getenv('FLIGHT_API_HOST', None)
+flight_route_api_host = os.getenv('FLIGHT_ROUTE_API', None)
 hmp_format = '%H:%M %p'
 hm_format = '%H:%M'
 
@@ -334,7 +341,8 @@ class FlightApi(object):
                         "type": "text",
                         "text": " / ".join(flight_metadata['flightData']['codeshares']) if flight_metadata['flightData']['codeshares'] is not None else 'N/A',
                         "size": "xs",
-                        "color": "#545454"
+                        "color": "#545454",
+                        "wrap": True
                         }
                     ]
                 }
@@ -342,7 +350,141 @@ class FlightApi(object):
         )
         return BubbleContainer.new_from_json_dict(bubble)
 
-if __name__ == "__main__":
-    flight_api = FlightApi()
-    print(flight_api._convert_epoch_to_hm(hmp_format, 1544007000))
-    print(flight_api._convert_epoch_to_hm(hm_format, 21600))
+    def get_aircraft_by_flight_no(self, flight_no):
+        result = self.get_latest_flight(flight_no)
+        if result is not None:
+            return result['type']
+        return 'N/A'
+
+    def get_flight_by_route(self, origin, destination):
+        print('ORIGIN: {0}, DESTINATION: {1}'.format(origin, destination))
+        today = datetime.datetime.today()
+        url = '{0}/v2/api-next/flight-tracker/route/{1}/{2}/{3}/{4}/{5}'.format(flight_route_api_host, origin, destination, today.year, today.month, today.day)
+        params = {
+            'numHours': '24',
+            'rqid': ''.join(random.choices(string.ascii_lowercase + string.digits, k=11)),
+            'hour': '0'
+        }
+        response = requests.get(url, params=params)
+        resp_json = response.json()['data']
+        result = {}
+        if len(resp_json['flights']) > 0:
+            flights = []
+            for flight in resp_json['flights']:
+                if 'isCodeshare' not in flight:
+                    flight_no = '{0}{1}'.format(flight['carrier']['fs'], flight['carrier']['flightNumber']).replace('*','')
+                    flights.append({
+                        'time': '{0} → {1}'.format(flight['departureTime']['timeAMPM'], flight['arrivalTime']['timeAMPM']),
+                        'flight_no': flight_no,
+                        'carrier_name': flight['carrier']['name']
+                    })
+                result['title'] = 'Up To {0} Flights Per Day'.format(len(flights))
+                result['description'] = '{0} ({1}) to {2} ({3})'.format(resp_json['header']['departureAirport']['city'],
+                                                                        resp_json['header']['departureAirport']['iata'],
+                                                                        resp_json['header']['arrivalAirport']['city'],
+                                                                        resp_json['header']['arrivalAirport']['iata'])
+            result['flights'] = flights
+            return result
+        return None
+    
+    def create_flight_route_message(self, data, paging=10):
+        carousel_container = CarouselContainer()
+        pages = [data['flights'][i: i+paging] for i in range(0, len(data['flights']), paging)]
+        for page in pages:
+            bubble = {
+                "type": "bubble",
+                "direction": "ltr",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": data['title'],
+                                    "size": "sm",
+                                    "align": "start",
+                                    "weight": "bold",
+                                    "color": "#000000"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": data['description'],
+                                    "size": "xs",
+                                    "color": "#929292",
+                                    "wrap": True
+                                }
+                            ]
+                        },
+                        {
+                            "type": "separator"
+                        }
+                    ]
+                }
+            }
+            for flight in page:
+                bubble_contents = bubble['body']['contents'].extend(
+                    (
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "contents": [
+                                {
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "flex": 2,
+                                    "contents": [
+                                        {
+                                            "type": "text",
+                                            "text": flight['time'],
+                                            "size": "xs",
+                                            "gravity": "top",
+                                            "color": "#000000",
+                                            "action": {
+                                                "type": "postback",
+                                                "label": "flight_info={0}".format(flight['flight_no']),
+                                                "data": "flight_info={0}".format(flight['flight_no'])
+                                            }
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": flight['carrier_name'],
+                                            "size": "xs",
+                                            "color": "#878787",
+                                            "wrap": True,
+                                            "action": {
+                                                "type": "postback",
+                                                "label": "flight_info={0}".format(flight['flight_no']),
+                                                "data": "flight_info={0}".format(flight['flight_no'])
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "text",
+                                    "text": flight['flight_no'],
+                                    "size": "lg",
+                                    "align": "center",
+                                    "color": "#269CB0",
+                                    "align": "center",
+                                    "gravity": "center",
+                                    "action": {
+                                        "type": "postback",
+                                        "label": "flight_info={0}".format(flight['flight_no']),
+                                        "data": "flight_info={0}".format(flight['flight_no'])
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "type": "separator"
+                        }
+                    )
+                )
+            bubble_container = BubbleContainer.new_from_json_dict(bubble)
+            carousel_container.contents.append(bubble)
+        return carousel_container

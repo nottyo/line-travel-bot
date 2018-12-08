@@ -138,6 +138,17 @@ def handle_postback_event(event):
         bubble_container = weather.get_weather_forecast_hourly_data(forecast_hourly_data)
         line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Weather Forecast Hourly",
                                                                       contents=bubble_container))
+    
+    if 'flight_info' in data:
+        flight_no = data.split('=')[1]
+        latest_flight = flight_api.get_latest_flight(flight_no)
+        if latest_flight is not None:
+            flight_metadata = flight_api.get_flight_metadata(latest_flight['flight_number'], latest_flight['adshex'])
+            if flight_metadata['success'] is True:
+                flight_bubble = flight_api.create_flight_message(latest_flight['flight_number'], latest_flight['adshex'], flight_metadata['payload'])
+                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight Information",
+                                                                          contents=flight_bubble))
+
 
 
 @handler.add(MessageEvent, message=TextMessage)
@@ -186,10 +197,21 @@ def handle_text_message(event):
             flight_metadata = flight_api.get_flight_metadata(latest_flight['flight_number'], latest_flight['adshex'])
             if flight_metadata['success'] is True:
                 flight_bubble = flight_api.create_flight_message(latest_flight['flight_number'], latest_flight['adshex'], flight_metadata['payload'])
-                print(flight_bubble)
                 line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight Information",
                                                                           contents=flight_bubble))
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I can\'t find your flight: {}. Please try another flight number'.format(n.group(1).upper())))
+
+    p = re.match('(^[A-Z]{3}-[A-Z]{3}$)', text.upper())
+    if p is not None:
+        text = p.group(1).upper()
+        origin = text.split('-')[0]
+        destination = text.split('-')[1]
+        flight_route_data = flight_api.get_flight_by_route(origin, destination)
+        if flight_route_data is not None:
+            carouesel_container = flight_api.create_flight_route_message(flight_route_data)
+            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight {0} Route Info".format(text),
+                                                                          contents=carouesel_container))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, There is no flight for "{}" route.'.format(text)))
 
 
 make_static_tmp_dir()
