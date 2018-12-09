@@ -17,11 +17,11 @@ image_host = os.getenv('IMAGE_URL', None)
 hmp_format = '%H:%M %p'
 hm_format = '%H:%M'
 
-with open('airports.json') as f:
-    airports = json.load(f)
-
 with open('emoji_flags.json') as cc:
     country_code = json.load(cc)
+
+with open('airports.json') as ap:
+    airports = json.load(ap)
 
 class FlightApi(object):
 
@@ -34,16 +34,25 @@ class FlightApi(object):
             return resp_json['flights'][0]
         return None
 
-    def get_country_code_flag(self, code):
+    def get_country_code_flag(self, name):
         for country in country_code:
-            if country['code'] == code:
+            if name.lower() in country['name'].lower():
                 return country['emoji']
 
     def get_airport_name_from_code(self, iata):
-        for airport in airports:
-            if airport['iata'] == iata:
-                airport['country_flag'] = self.get_country_code_flag(airport['iso'])
-                return airport
+        for code, data in airports.items():
+            if code == iata:
+                country_flag = self.get_country_code_flag(data['country'])
+                data['country_flag'] = country_flag
+                return data
+        return {
+            "name": iata,
+            "city": iata,
+            "country": iata,
+            "iata": iata,
+            "icao": iata,
+            "country_flag": None
+        }
     
     def get_flight_metadata(self, flight_no, adshex):
         url = '{0}/api/api.php'.format(api_host)
@@ -536,29 +545,37 @@ class FlightApi(object):
         if resp_json['departures'] is not None and resp_json['arrivals'] is not None:
             result = {}
             airport = self.get_airport_name_from_code(airport_iata)
-            result['departure_title'] = '{0} {1} ({2})'.format(airport['name'].upper(), airport['country_flag'], airport_iata)
-            result['arrival_title'] = '{0} {1} ({2})'.format(airport['name'].upper(), airport['country_flag'], airport_iata)
+            airport_country = '{0} {1}'.format(airport['country'], airport['country_flag'], ) if airport['country_flag'] is not None else airport['country']
+            result['departure_title'] = '{0}, {1}, {2} ({3})'.format(airport['name'], airport['city'], airport_country, airport_iata)
+            result['arrival_title'] = '{0}, {1}, {2} ({3})'.format(airport['name'], airport['city'], airport_country, airport_iata)
             result['departures'] = []
             result['arrivals'] = []
-            for index in range(0, limit):
+            departure_length = limit if len(resp_json['departures']) > limit else len(resp_json['departures'])
+            print('departure_length: {0}'.format(departure_length))
+            for index in range(0, departure_length-1):
                 departure = resp_json['departures'][index]
                 departure_time = departure['estimatedDepartureTime'] if departure['estimatedDepartureTime'] is not None else departure['scheduledDepartureTime']
                 destination_airport = self.get_airport_name_from_code(departure['arrApt'])
+                departure_city = '{0} {1}'.format(destination_airport['country_flag'], destination_airport['city'].upper()) if destination_airport['country_flag'] is not None else destination_airport['city'].upper()
                 result['departures'].append(
                     {
                         'time': self._convert_epoch_withoffset('%H:%M', departure_time, departure['offset']),
-                        'destination': '{0} {1}'.format(destination_airport['country_flag'], destination_airport['name'].upper()),
+                        'destination': departure_city,
                         'destination_code': destination_airport['iata'],
                         'flight_no': departure['flightNumber']
                     }
                 )
+            arrival_length = limit if len(resp_json['arrivals']) > limit else len(resp_json['arrivals'])
+            print('arrival_length: {0}'.format(arrival_length))
+            for index in range(0, arrival_length-1):
                 arrival = resp_json['arrivals'][index]
                 arrival_time = arrival['scheduledArrivalTime']
                 origin_airport = self.get_airport_name_from_code(arrival['depApt'])
+                origin_city = '{0} {1}'.format(origin_airport['country_flag'], origin_airport['city'].upper()) if origin_airport['country_flag'] is not None else origin_airport['city'].upper()
                 result['arrivals'].append(
                     {
                         'time': self._convert_epoch_withoffset('%H:%M', arrival_time, arrival['offset']),
-                        'origin': '{0} {1}'.format(origin_airport['country_flag'], origin_airport['name'].upper()),
+                        'origin': origin_city,
                         'origin_code': origin_airport['iata'],
                         'flight_no': arrival['flightNumber']
                     }
@@ -587,14 +604,15 @@ class FlightApi(object):
                         "type": "text",
                         "text": 'DEPARTURES',
                         "align": "start",
-                        "size": "lg",
+                        "size": "xl",
                         "weight": "bold"
                     },
                     {
                         "type": "text",
                         "text": airport_data['departure_title'],
                         "size": "xs",
-                        "align": "start"
+                        "align": "start",
+                        "wrap": True
                     }
                 ]
             },
@@ -656,7 +674,7 @@ class FlightApi(object):
                             "type": "text",
                             "text": departure['destination'],
                             "flex": 2,
-                            "size": "xxs",
+                            "size": "xs",
                             "align": "start",
                             "color": "#FFFFFF",
                             "wrap": True,
@@ -698,14 +716,15 @@ class FlightApi(object):
                         "type": "text",
                         "text": "ARRIVALS",
                         "align": "start",
-                        "size": "lg",
+                        "size": "xl",
                         "weight": "bold"
                     },
                     {
                         "type": "text",
                         "text": airport_data['arrival_title'],
                         "align": "start",
-                        "size": "xs"
+                        "size": "xs",
+                        "wrap": True
                     }
                 ]
             },
@@ -767,7 +786,7 @@ class FlightApi(object):
                             "type": "text",
                             "text": arrival['origin'],
                             "flex": 2,
-                            "size": "xxs",
+                            "size": "xs",
                             "align": "start",
                             "color": "#FFFFFF",
                             "wrap": True,

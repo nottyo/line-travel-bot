@@ -871,7 +871,7 @@
         "code": "KR",
         "emoji": "🇰🇷",
         "unicode": "U+1F1F0 U+1F1F7",
-        "name": "Korea Republic",
+        "name": "South Korea",
         "title": "flag for South Korea"
     },
     {
@@ -899,7 +899,7 @@
         "code": "LA",
         "emoji": "🇱🇦",
         "unicode": "U+1F1F1 U+1F1E6",
-        "name": "Lao People's Democratic Republic",
+        "name": "Laos",
         "title": "flag for Lao People's Democratic Republic"
     },
     {
@@ -1039,7 +1039,7 @@
         "code": "MM",
         "emoji": "🇲🇲",
         "unicode": "U+1F1F2 U+1F1F2",
-        "name": "Myanmar",
+        "name": "Burma",
         "title": "flag for Myanmar"
     },
     {
@@ -1053,7 +1053,7 @@
         "code": "MO",
         "emoji": "🇲🇴",
         "unicode": "U+1F1F2 U+1F1F4",
-        "name": "Macao",
+        "name": "Macau",
         "title": "flag for Macao"
     },
     {
@@ -1704,8 +1704,8 @@
         "code": "VG",
         "emoji": "🇻🇬",
         "unicode": "U+1F1FB U+1F1EC",
-        "name": "Virgin Islands, British",
-        "title": "flag for Virgin Islands, British"
+        "name": "British Virgin Islands",
+        "title": "flag for British Virgin Islands"
     },
     {
         "code": "VI",
@@ -1718,7 +1718,7 @@
         "code": "VN",
         "emoji": "🇻🇳",
         "unicode": "U+1F1FB U+1F1F3",
-        "name": "Viet Nam",
+        "name": "Vietnam",
         "title": "flag for Viet Nam"
     },
     {

@@ -155,9 +155,15 @@ def handle_postback_event(event):
         print('airport_name: {0}'.format(airport_name))
         if airport_name is not None:
             airport_data = flight_api.get_airport_data(airport_code)
-            airport_message = flight_api.create_airport_message(airport_data)
-            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Airport Information",
-                                                                          contents=airport_message))
+            if airport_data is not None:
+                airport_message = flight_api.create_airport_message(airport_data)
+                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Airport Information",
+                                                                            contents=airport_message))
+            else:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, there is no airport information for \"{0}\"'.format(airport_name)))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I could\'t find airport information for {0}'.format(airport_code)))
+            
 
 
 @handler.add(MessageEvent, message=TextMessage)
