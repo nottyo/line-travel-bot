@@ -168,7 +168,11 @@ class FlightApi(object):
                                 {
                                 "type": "text",
                                 "text": departure_airport,
-                                "size": "xxl"
+                                "size": "xxl",
+                                "action": {
+                                    "type": "postback",
+                                    "data": "airport={0}".format(departure_airport)
+                                }
                                 }
                             ]
                             },
@@ -196,6 +200,10 @@ class FlightApi(object):
                                 "align": "end",
                                 "weight": "regular",
                                 "wrap": True,
+                                "action": {
+                                    "type": "postback",
+                                    "data": "airport={0}".format(arrival_airport)
+                                }
                                 }
                             ]
                             }
