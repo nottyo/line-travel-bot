@@ -5,6 +5,8 @@ import datetime
 import string
 import random
 import json
+from datetime import timezone
+import dateutil.parser
 from datetime import timedelta
 from linebot.models import (
     BubbleContainer,
@@ -79,6 +81,43 @@ class FlightApi(object):
         _time = time.gmtime(epoch + offset)
         convert_time = time.strftime(format, _time)
         return convert_time
+    
+    def _convert_iso_to_epoch(self, iso_dt):
+        dt = dateutil.parser.parse(iso_dt)
+        return dt.replace(tzinfo=timezone.utc).timestamp()
+    
+    def _get_timezone_offset(self, iso_dt):
+        dt = dateutil.parser.parse(iso_dt)
+        return dt.tzinfo.utcoffset(dt).seconds
+    
+    def _is_next_day(self, departure_iso, arrival_iso):
+        departure = dateutil.parser.parse(departure_iso)
+        arrival = dateutil.parser.parse(arrival_iso)
+        if arrival.day != departure.day:
+            return True
+        return False
+
+    def get_flight_schedule(self, flight_no):
+        url = '{0}/v2/api/search/structured-search'.format(flight_route_api_host)
+        params = {
+            'rqid': ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
+        }
+        body = {
+            'gram': flight_no
+        }
+        response = requests.post(url, params=params, json=body)
+        flights = response.json()
+        for flight in flights:
+            if flight['_source']['name'] == flight_no:
+                result = {}
+                result['departureTime'] = self._convert_iso_to_epoch(flight['_source']['departureDateTime'])
+                result['departureTZOffset'] = self._get_timezone_offset(flight['_source']['departureDateTime'])
+                result['arrivalTime'] = self._convert_iso_to_epoch(flight['_source']['arrivalDateTime'])
+                result['arrivalTZOffset'] = self._get_timezone_offset(flight['_source']['arrivalDateTime'])
+                result['isNextDay'] = self._is_next_day(flight['_source']['departureDateTime'], flight['_source']['arrivalDateTime'])
+                return result
+        return None
+    
 
     def create_flight_message(self, flight_no, adshex, flight_metadata):
         departure_airport = flight_metadata['flightData']['departureApt']
@@ -189,6 +228,16 @@ class FlightApi(object):
                 "backgroundColor": "#5290CC"
             }
         
+        if flight_metadata['statusData']['depSchdLOC'] is None:
+            flight_schedule = self.get_flight_schedule(flight_no)
+            print('flight_schedule: {0}'.format(flight_schedule))
+            if flight_schedule is not None:
+                flight_metadata['statusData']['depSchdLOC'] = flight_schedule['departureTime']
+                flight_metadata['statusData']['depOffset'] = flight_schedule['departureTZOffset']
+                flight_metadata['statusData']['arrSchdLOC'] = flight_schedule['arrivalTime']
+                flight_metadata['statusData']['arrOffset'] = flight_schedule['arrivalTZOffset']
+                next_day = flight_schedule['isNextDay']
+
         if flight_metadata['statusData']['depSchdLOC'] is not None:
             next_day = False
             if flight_metadata['flightData']['arrivalDay'] == 'Next day':
@@ -551,7 +600,6 @@ class FlightApi(object):
             result['departures'] = []
             result['arrivals'] = []
             departure_length = limit if len(resp_json['departures']) > limit else len(resp_json['departures'])
-            print('departure_length: {0}'.format(departure_length))
             for index in range(0, departure_length-1):
                 departure = resp_json['departures'][index]
                 departure_time = departure['estimatedDepartureTime'] if departure['estimatedDepartureTime'] is not None else departure['scheduledDepartureTime']
@@ -566,7 +614,6 @@ class FlightApi(object):
                     }
                 )
             arrival_length = limit if len(resp_json['arrivals']) > limit else len(resp_json['arrivals'])
-            print('arrival_length: {0}'.format(arrival_length))
             for index in range(0, arrival_length-1):
                 arrival = resp_json['arrivals'][index]
                 arrival_time = arrival['scheduledArrivalTime']
