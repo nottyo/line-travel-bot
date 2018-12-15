@@ -1,4 +1,6 @@
-from flask import Flask, request, abort, jsonify
+# -*- coding: utf-8 -*-
+
+from flask import Flask, request, abort, jsonify, send_from_directory
 from weather import Weather
 from places import Places
 from flight_api import FlightApi
@@ -7,6 +9,7 @@ import sys
 import json
 import re
 import errno
+import requests
 from linebot import (
     LineBotApi, WebhookHandler
 )
@@ -23,7 +26,7 @@ from linebot.models import (
     PostbackAction, DatetimePickerAction,
     CarouselTemplate, CarouselColumn, PostbackEvent,
     StickerMessage, StickerSendMessage, LocationMessage, LocationSendMessage,
-    ImageMessage, VideoMessage, AudioMessage, FileMessage,
+    ImageMessage, VideoMessage, AudioMessage, FileMessage, ImageSendMessage,
     UnfollowEvent, FollowEvent, JoinEvent, LeaveEvent, BeaconEvent,
     FlexSendMessage, BubbleContainer, ImageComponent, BoxComponent,
     TextComponent, SpacerComponent, IconComponent, ButtonComponent,
@@ -92,6 +95,28 @@ def health_check():
         }
     )
 
+def generate_flight_map(origin, destination, resolution='720x360'):
+    url = 'http://www.gcmap.com/map'
+    params = {
+        'P': '{0}-{1}'.format(origin.upper(), destination.upper()),
+        'MS': 'bm',
+        'MR': '900',
+        'MX': resolution,
+        'PM': '*'
+    }
+    resp = requests.get(url, params=params)
+    if resp.status_code == 200:
+        dir_name = 'static'
+        resolution = resolution.split('x')[1]
+        filename = '{0}/{1}{2}_{3}.png'.format(dir_name, origin.upper(), destination.upper(), resolution)
+        file_exist = os.path.exists(filename)
+        if file_exist is False:
+            with open(filename, 'wb') as f:
+                for chunk in resp:
+                    f.write(chunk)
+        else: 
+            print('====== FILE: {0} IS EXIST ========'.format(filename))
+        return 'https://{0}/{1}'.format(request.host, filename)
 
 @handler.add(MessageEvent, message=LocationMessage)
 def handle_location_message(event):
@@ -146,13 +171,17 @@ def handle_postback_event(event):
             flight_metadata = flight_api.get_flight_metadata(latest_flight['flight_number'], latest_flight['adshex'])
             if flight_metadata['success'] is True:
                 flight_bubble = flight_api.create_flight_message(latest_flight['flight_number'], latest_flight['adshex'], flight_metadata['payload'])
-                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight Information",
-                                                                          contents=flight_bubble))
+                image_original_url = generate_flight_map(flight_metadata['payload']['flightData']['departureApt'], flight_metadata['payload']['flightData']['arrivalApt'])
+                image_preview_url = generate_flight_map(flight_metadata['payload']['flightData']['departureApt'], flight_metadata['payload']['flightData']['arrivalApt'], '240x120')
+                image_msg = ImageSendMessage(original_content_url=image_original_url, preview_image_url=image_preview_url)
+                messages = []
+                messages.append(FlexSendMessage(alt_text="Flight Information", contents=flight_bubble))
+                messages.append(image_msg)
+                line_bot_api.reply_message(event.reply_token, messages)
 
     if 'airport' in data:
         airport_code = data.split('=')[1]
         airport_name = flight_api.get_airport_name_from_code(airport_code)
-        print('airport_name: {0}'.format(airport_name))
         if airport_name is not None:
             airport_data = flight_api.get_airport_data(airport_code)
             if airport_data is not None:
@@ -197,7 +226,6 @@ def handle_text_message(event):
     if m is not None:
         place_name = m.group(1)
         weather_data = weather.get_weather_data(place_name)
-        print(json.dumps(weather_data))
         if isinstance(weather_data, str):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=weather_data))
         else:
@@ -212,8 +240,13 @@ def handle_text_message(event):
             flight_metadata = flight_api.get_flight_metadata(latest_flight['flight_number'], latest_flight['adshex'])
             if flight_metadata['success'] is True:
                 flight_bubble = flight_api.create_flight_message(latest_flight['flight_number'], latest_flight['adshex'], flight_metadata['payload'])
-                line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Flight Information",
-                                                                          contents=flight_bubble))
+                image_original_url = generate_flight_map(flight_metadata['payload']['flightData']['departureApt'], flight_metadata['payload']['flightData']['arrivalApt'])
+                image_preview_url = generate_flight_map(flight_metadata['payload']['flightData']['departureApt'], flight_metadata['payload']['flightData']['arrivalApt'], '240x120')
+                image_msg = ImageSendMessage(original_content_url=image_original_url, preview_image_url=image_preview_url)
+                messages = []
+                messages.append(FlexSendMessage(alt_text="Flight Information", contents=flight_bubble))
+                messages.append(image_msg)
+                line_bot_api.reply_message(event.reply_token, messages)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I can\'t find your flight: {}. Please try another flight number'.format(n.group(1).upper())))
 
     p = re.match('(^[A-Z]{3}-[A-Z]{3}$)', text.upper())
