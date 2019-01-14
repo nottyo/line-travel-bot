@@ -25,12 +25,16 @@ with open('emoji_flags.json') as cc:
 with open('airports.json') as ap:
     airports = json.load(ap)
 
+headers = {
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.110 Safari/537.36'
+}
+
 class FlightApi(object):
 
     def get_latest_flight(self, flight_no):
         current_milli_time = int(round(time.time() * 1000))
         url = '{0}/endpoints/playback/previousFlights.php?fn={1}&_={2}'.format(api_host, flight_no, current_milli_time)
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
         resp_json = response.json()
         if resp_json['flights'] is not False and len(resp_json['flights']) > 0:
             return resp_json['flights'][0]
