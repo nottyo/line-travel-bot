@@ -95,6 +95,16 @@ def health_check():
         }
     )
 
+@app.route('/aqi', methods=['GET'])
+def push_aqi():
+    to = request.args.get('id')
+    print('====== PUSH AQI TO: {} ======='.format(to))
+    messages = weather.get_weather_aqi_message()
+    line_bot_api.push_message(to=to, messages=messages)
+    return jsonify({
+        'status': 'ok'
+    })
+
 def generate_flight_map(origin, destination, resolution='720x360'):
     url = 'http://www.gcmap.com/map'
     params = {
@@ -194,10 +204,22 @@ def handle_postback_event(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I could\'t find airport information for {0}'.format(airport_code)))
             
 
+def print_source(event):
+    if isinstance(event.source, SourceUser):
+        print('user_id: {0}'.format(event.source.user_id))
+    if isinstance(event.source, SourceRoom):
+        print('room_id: {0}'.format(event.source.room_id))
+    if isinstance(event.source, SourceGroup):
+        print('group_id: {0}'.format(event.source.group_id))
+
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_text_message(event):
     text = event.message.text
+    print_source(event)
+    if 'aqi' == text.lower():
+        aqi_messages = weather.get_weather_aqi_message()
+        line_bot_api.reply_message(event.reply_token, messages=aqi_messages)
 
     if 'อากาศ' == text or 'weather' == text.lower():
         quick_reply = QuickReply(
