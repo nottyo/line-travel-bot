@@ -220,6 +220,9 @@ def handle_text_message(event):
     if 'aqi' == text.lower():
         aqi_messages = weather.get_weather_aqi_message()
         line_bot_api.reply_message(event.reply_token, messages=aqi_messages)
+    
+    if 'มองบน' == text.lower():
+        line_bot_api.reply_message(event.reply_token, ImageSendMessage(original_content_url='https://i.imgur.com/MWQBxJL.jpg', preview_image_url='https://i.imgur.com/MWQBxJL.jpg'))
 
     if 'อากาศ' == text or 'weather' == text.lower():
         quick_reply = QuickReply(
