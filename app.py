@@ -222,21 +222,19 @@ def handle_text_message(event):
         line_bot_api.reply_message(event.reply_token, messages=aqi_messages)
     
     if 'มองบน' in text.lower():
-        bubble = {
-            "type": "bubble",
-            "hero": {
-                "type": "image",
-                "url": "https://media.giphy.com/media/5Wi5ydRYRM28q9Gvyv/giphy.gif",
-                "size": "full",
-                "aspectMode": "cover"
-                }
-        }
-        bubble_container = BubbleContainer.new_from_json_dict(bubble)
         image_carousel_template = ImageCarouselTemplate(columns=[
             ImageCarouselColumn(image_url='https://media.giphy.com/media/5Wi5ydRYRM28q9Gvyv/giphy.gif',
             action=MessageAction(label='มองบน', text='มองบน'))
         ])
         line_bot_api.reply_message(event.reply_token, TemplateSendMessage(alt_text='มองบนเรยจ้า', template=image_carousel_template))
+    
+    if 'lineqa' in text.lower():
+        image_carousel_template = ImageCarouselTemplate(columns=[
+            ImageCarouselColumn(image_url='https://media.giphy.com/media/4VUugEkI9a9DsKTmW1/giphy.gif',
+            action=MessageAction(label='Daebak', text='대박!'))
+        ])
+        line_bot_api.reply_message(event.reply_token, TemplateSendMessage(alt_text='대박!', template=image_carousel_template))
+        
 
     if 'อากาศ' == text or 'weather' == text.lower():
         quick_reply = QuickReply(
