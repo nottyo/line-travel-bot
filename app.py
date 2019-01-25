@@ -31,7 +31,7 @@ from linebot.models import (
     FlexSendMessage, BubbleContainer, ImageComponent, BoxComponent,
     TextComponent, SpacerComponent, IconComponent, ButtonComponent,
     SeparatorComponent, CarouselContainer, QuickReply, QuickReplyButton, LocationAction, CameraAction,
-    CameraRollAction
+    CameraRollAction, ImagemapSendMessage
 )
 
 app = Flask(__name__)
@@ -232,7 +232,11 @@ def handle_text_message(event):
                 }
         }
         bubble_container = BubbleContainer.new_from_json_dict(bubble)
-        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="มองบน", contents=bubble_container))
+        image_carousel_template = ImageCarouselTemplate(columns=[
+            ImageCarouselColumn(image_url='https://media.giphy.com/media/5Wi5ydRYRM28q9Gvyv/giphy.gif',
+            action=MessageAction(label='มองบน', text='มองบน'))
+        ])
+        line_bot_api.reply_message(event.reply_token, TemplateSendMessage(alt_text='มองบนเรยจ้า', template=image_carousel_template))
 
     if 'อากาศ' == text or 'weather' == text.lower():
         quick_reply = QuickReply(
