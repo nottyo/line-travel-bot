@@ -513,7 +513,7 @@ class Weather:
                         {
                             "type": "text",
                             "text": aqi_last['AQI']['aqi'],
-                            "size": "5xl",
+                            "size": "4xl",
                             "align": "center",
                             "gravity": "top",
                             "wrap": True,

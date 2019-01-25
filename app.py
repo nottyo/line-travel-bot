@@ -221,8 +221,18 @@ def handle_text_message(event):
         aqi_messages = weather.get_weather_aqi_message()
         line_bot_api.reply_message(event.reply_token, messages=aqi_messages)
     
-    if 'มองบน' == text.lower():
-        line_bot_api.reply_message(event.reply_token, ImageSendMessage(original_content_url='https://i.imgur.com/MWQBxJL.jpg', preview_image_url='https://i.imgur.com/MWQBxJL.jpg'))
+    if 'มองบน' in text.lower():
+        bubble = {
+            "type": "bubble",
+            "hero": {
+                "type": "image",
+                "url": "https://media.giphy.com/media/5Wi5ydRYRM28q9Gvyv/giphy.gif",
+                "size": "full",
+                "aspectMode": "cover"
+                }
+        }
+        bubble_container = BubbleContainer.new_from_json_dict(bubble)
+        line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="มองบน", contents=bubble_container))
 
     if 'อากาศ' == text or 'weather' == text.lower():
         quick_reply = QuickReply(
