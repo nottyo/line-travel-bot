@@ -98,9 +98,12 @@ def health_check():
 @app.route('/aqi', methods=['GET'])
 def push_aqi():
     to = request.args.get('id')
+    lat = request.args.get('lat')
+    lng = request.args.get('lng')
     print('====== PUSH AQI TO: {} ======='.format(to))
-    messages = weather.get_weather_aqi_message()
-    line_bot_api.push_message(to=to, messages=messages)
+    aqi_data = weather.get_weather_aqi(lat, lng)
+    aqi_flex_message = weather.get_weather_aqi_message(aqi_data)
+    line_bot_api.push_message(to=to, messages=aqi_flex_message)
     return jsonify({
         'status': 'ok'
     })
@@ -132,9 +135,12 @@ def generate_flight_map(origin, destination, resolution='720x360'):
 def handle_location_message(event):
     latlng = '{0} {1}'.format(event.message.latitude, event.message.longitude)
     weather_data = weather.get_weather_data(latlng)
-    bubble_container = weather.get_weather_message(weather_data)
+    weather_message = weather.get_weather_message(weather_data)
     messages = []
-    messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=bubble_container))
+    messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=weather_message))
+    aqi_data = weather.get_weather_aqi(event.message.latitude, event.message.longitude)
+    aqi_message = weather.get_weather_aqi_message(aqi_data)
+    messages.append(aqi_message)
     line_bot_api.reply_message(event.reply_token, messages=messages)
 
 
@@ -218,8 +224,12 @@ def handle_text_message(event):
     text = event.message.text
     print_source(event)
     if 'aqi' == text.lower():
-        aqi_messages = weather.get_weather_aqi_message()
-        line_bot_api.reply_message(event.reply_token, messages=aqi_messages)
+        line_bot_api.reply_message(event.reply_token, messages=TextSendMessage(text='Please share your location to get an accurate AQI krub', 
+                    quick_reply=QuickReply(items=
+                        [
+                            QuickReplyButton(action=LocationAction(label='Share Location'))
+                        ]
+                    )))
     
     if 'มองบน' in text.lower():
         image_carousel_template = ImageCarouselTemplate(columns=[

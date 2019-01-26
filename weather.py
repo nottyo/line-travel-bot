@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import pytz
+import time
 from linebot.models import (
     BubbleContainer, FlexSendMessage, TextSendMessage, TextMessage
 )
@@ -11,6 +12,7 @@ from linebot.models import (
 weather_forecast_url = 'https://api.weatherbit.io/v2.0'
 
 geocode_api_url = 'https://api.opencagedata.com/geocode/v1/json'
+aqi_api_token = os.getenv('WEATHER_AQI_API_TOKEN', None)
 aqi_api_url = os.getenv('WEATHER_AQI_API', None)
 weather_api_key = os.getenv('WEATHER_API_KEY', None)
 geocode_api_key = os.getenv('GEOCODE_API_KEY', None)
@@ -25,6 +27,10 @@ if geocode_api_key is None:
 
 if aqi_api_url is None:
     print('Specify WEATHER_AQI_API in environment variable')
+    sys.exit(1)
+
+if aqi_api_token is None:
+    print('Specify WEATHER_AQI_API_TOKEN in environment variable')
     sys.exit(1)
 
 
@@ -75,8 +81,26 @@ class Weather:
         weather_data['address'] = result['results'][0]
         return weather_data
 
-    def get_weather_aqi(self):
-        response = requests.get(aqi_api_url)
+    def get_weather_aqi(self, lat, lng):
+        url = '{0}/feed/geo:{1};{2}/'.format(aqi_api_url, lat, lng)
+        params = {
+            'token': aqi_api_token
+        }
+        response = requests.get(url, params=params)
+        # idx = response.json()['data']['idx']
+        # post_url = '{0}/api/feed/@{1}/obs.en.json'.format(aqi_api_url, idx)
+        # post_headers = {
+        #     'content-type': 'application/x-www-form-urlencoded'
+        # }
+        # post_body = {
+        #     'token': aqi_api_token,
+        #     'uid': 'QKyXD{0}'.format(int(time.time())),
+        #     'rqc': '2'
+        # }
+        # print('post_body: {0}'.format(post_body))
+        # resp = requests.post(post_url, headers=post_headers, data=post_body)
+        # resp_json = resp.json()
+        # print(json.dumps(resp_json))
         return response.json()
 
     def _format_date(self, date_str, from_format="%Y-%m-%d", to_format="%a, %-d %b"):
@@ -402,52 +426,44 @@ class Weather:
             )
         return BubbleContainer.new_from_json_dict(bubble)
 
-    def get_weather_aqi_message(self):
-        weather_aqi_data = self.get_weather_aqi()
-        aqi_last = weather_aqi_data['AQILast']
-        aqi_color_id = int(aqi_last['AQI']['color_id'])
-        aqi_param = aqi_last['AQI']['param']
+    def get_weather_aqi_message(self, weather_aqi_data):
+        data = weather_aqi_data['data']
+        aqi_last = int(data['aqi'])
+        aqi_level = 1
         img_logo_url = ''
         bg_color = '#FFFF00'
         aqi_level_text = 'Moderate'
         msg_text = ''
-        aqi_description_text = 'PM 25 | 83 μg/m3'
-        print('======= AQI color_id: {0} ======='.format(aqi_last['AQI']['color_id']))
-        if aqi_color_id == 1:
+        if aqi_last > 0 and aqi_last <= 50:
             img_logo_url += 'https://i.imgur.com/35KrVow.png'
-            bg_color = '#3bccff'
-            aqi_level_text = 'Excellent'
-            msg_text = 'คุณภาพอากาศดีมาก เหมาะสำหรับกิจกรรมกลางแจ้งและการท่องเที่ยว'
-        elif aqi_color_id == 2:
-            img_logo_url += 'https://i.imgur.com/CSa1YMU.png'
-            bg_color = '#92d050'
+            bg_color = '#009966'
             aqi_level_text = 'Good'
-            msg_text = 'คุณภาพอากาศดี สามารถทำกิจกรรมกลางแจ้งและการท่องเที่ยวได้ตามปกติ'
-        elif aqi_color_id == 3:
-            img_logo_url += 'https://i.imgur.com/jaBgWYt.png'
-            bg_color = '#ffff00'
+            aqi_level = 1
+        elif aqi_last > 50 and aqi_last <= 100:
+            img_logo_url += 'https://i.imgur.com/CSa1YMU.png'
+            bg_color = '#ffde33'
             aqi_level_text = 'Moderate'
-            msg_text = 'ประชาชนทั่วไป : สามารถทำกิจกรรมกลางแจ้งได้ตามปกติ\nผู้ที่ต้องดูแลสุขภาพเป็นพิเศษ : หากมีอาการเบื้องต้น เช่น ไอ หายใจลำบาก ระคายเคืองตา ควรลดระยะเวลาการทำกิจกรรมกลางแจ้ง'
-        elif aqi_color_id == 4:
+            aqi_level = 2
+        elif aqi_last > 100 and aqi_last <= 150:
+            img_logo_url += 'https://i.imgur.com/jaBgWYt.png'
+            bg_color = '#ff9933'
+            aqi_level_text = 'Unhealthy for Sensitive Groups'
+            aqi_level = 3
+        elif aqi_last > 150 and aqi_last <= 200:
             img_logo_url += 'https://i.imgur.com/EZQO623.png'
-            bg_color = '#ffa200'
+            bg_color = '#cc0033'
             aqi_level_text = 'Unhealthy'
-            msg_text = 'ประชาชนทั่วไป : ควรเฝ้าระวังสุขภาพ ถ้ามีอาการเบื้องต้น เช่น ไอ หายใจลำบาก ระคายเคืองตา ควรลดระยะเวลาการทำกิจกรรมกลางแจ้ง หรือใช้อุปกรณ์ป้องกันตนเองหากมีความจำเป็น\nผู้ที่ต้องดูแลสุขภาพเป็นพิเศษ : ควรลดระยะเวลาการทำกิจกรรมกลางแจ้ง หรือใช้อุปกรณ์ป้องกันตนเองหากมีความจำเป็น ถ้ามีอาการทางสุขภาพ เช่น ไอ หายใจลำบาก ตาอักเสบ แน่นหน้าอก ปวดศีรษะ หัวใจเต้นไม่เป็นปกติ คลื่นไส้ อ่อนเพลีย ควรปรึกษาแพทย์'
-        elif aqi_color_id == 5: 
+            aqi_level = 4
+        elif aqi_last > 200 and aqi_last <= 300:
             img_logo_url += 'https://i.imgur.com/jJdrpp0.png'
-            bg_color = '#ff3b3b'
+            bg_color = '#660099'
             aqi_level_text = 'Very Unhealthy'
-            msg_text = 'ทุกคนควรหลีกเลี่ยงกิจกรรมกลางแจ้งทั้งหมด หลีกเลี่ยงพื้นที่ที่มีมลพิษทางอากาศสูง หรือใช้อุปกรณ์ป้องกันตนเองหากมีความจำเป็น หากมีอาการทางสุขภาพควรปรึกษาแพทย์'
-        if aqi_param == 'PM25':
-            aqi_description_text = 'PM25 | {0} μg/m3'.format(aqi_last['PM25']['value'])
-        elif aqi_param == 'PM10':
-            aqi_description_text = 'PM10 | {0} μg/m3'.format(aqi_last['PM10']['value'])
-        elif aqi_param == 'O3':
-            aqi_description_text = 'O3 | {0} μg/m3'.format(aqi_last['O3']['value'])
-        elif aqi_param == 'NO2':
-            aqi_description_text = 'NO2 | {0} μg/m3'.format(aqi_last['NO2']['value'])
-        elif aqi_param == 'SO2':
-            aqi_description_text = 'SO2 | {0} μg/m3'.format(aqi_last['SO2']['value'])
+            aqi_level = 5
+        elif aqi_last > 300:
+            img_logo_url += 'https://i.imgur.com/jJdrpp0.png'
+            bg_color = '#7e0023'
+            aqi_level_text = 'Hazardous'
+            aqi_level = 6
         bubble = {
             "type": "bubble",
             "direction": "ltr",
@@ -461,27 +477,38 @@ class Weather:
                     "contents": [
                     {
                         "type": "text",
-                        "text": weather_aqi_data['nameEN'],
+                        "text": data['city']['name'],
                         "align": "center",
+                        "wrap": True,
                         "weight": "bold",
-                        "color": "#FFFFFF"
+                        "color": "#FFFFFF",
+                        "action": {
+                            "type": "uri",
+                            "label": "AQI Description",
+                            "uri": data['city']['url']
+                        }
                     },
                     {
                         "type": "text",
-                        "text": weather_aqi_data['areaEN'],
+                        "text": data['time']['s'],
                         "size": "xs",
                         "align": "center",
                         "color": "#FFFFFF",
-                        "wrap": True
+                        "action": {
+                            "type": "uri",
+                            "label": "AQI Description",
+                            "uri": data['city']['url']
+                        }
                     },
                     {
                         "type": "text",
-                        "text": "{0} {1}".format(aqi_last['date'], aqi_last['time']),
+                        "text": 'Click me to see more detail',
                         "size": "xs",
                         "align": "center",
                         "color": "#FFFFFF"
                     }
                     ]
+                    
                 }
                 ]
             },
@@ -496,24 +523,12 @@ class Weather:
                     {
                         "type": "box",
                         "layout": "vertical",
-                        "contents": [
-                        {
-                            "type": "image",
-                            "url": img_logo_url,
-                            "flex": 1,
-                            "size": "4xl"
-                        }
-                        ]
-                    },
-                    {
-                        "type": "box",
-                        "layout": "vertical",
                         "flex": 1,
                         "contents": [
                         {
                             "type": "text",
-                            "text": aqi_last['AQI']['aqi'],
-                            "size": "4xl",
+                            "text": "Air Quality Index PM 2.5",
+                            "size": "xl",
                             "align": "center",
                             "gravity": "top",
                             "wrap": True,
@@ -522,17 +537,20 @@ class Weather:
                         },
                         {
                             "type": "text",
-                            "text": "US AQI ({0})".format(aqi_level_text),
-                            "size": "xs",
-                            "wrap": True,
+                            "text": str(aqi_last),
+                            "size": "5xl",
                             "align": "center",
+                            "gravity": "top",
+                            "wrap": True,
+                            "weight": "bold",
                             "color": "#000000"
                         },
                         {
                             "type": "text",
-                            "text": aqi_description_text,
+                            "text": aqi_level_text,
+                            "size": "lg",
+                            "weight": "bold",
                             "wrap": True,
-                            "size": "xs",
                             "align": "center",
                             "color": "#000000"
                         }
@@ -551,12 +569,8 @@ class Weather:
                 }
             }
             }
-        messages = []
         flex_message = BubbleContainer.new_from_json_dict(bubble)
-        print(json.dumps(bubble))
-        messages.append(FlexSendMessage(alt_text='Air Quality Index', contents=flex_message))
-        messages.append(TextSendMessage(text=msg_text))
-        return messages
+        return FlexSendMessage(alt_text='Air Quality Index', contents=flex_message)
         
 if __name__ == '__main__':
     # dt_str = '2018-09-08 10:49'
