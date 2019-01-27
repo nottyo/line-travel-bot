@@ -80,12 +80,20 @@ class Weather:
         weather_data = self.get_weather(geometry['lat'], geometry['lng'])
         weather_data['address'] = result['results'][0]
         return weather_data
+    
+    def get_weather_aqi_by_place_name(self, place_name):
+        result = self._resolve_location_latlng(place_name)
+        if len(result['results']) == 0:
+            return "I couldn't find weather from your place or lat/lng: {}".format(place_name)
+        geometry = result['results'][0]['geometry']
+        return self.get_weather_aqi(geometry['lat'], geometry['lng'])
 
     def get_weather_aqi(self, lat, lng):
-        url = '{0}/feed/geo:{1};{2}/'.format(aqi_api_url, lat, lng)
+        url = '{0}/feed/geo:{1};{2}/'.format(aqi_api_url, str(lat), str(lng))
         params = {
             'token': aqi_api_token
         }
+        print('weather_aqi_url: {0}'.format(url))
         response = requests.get(url, params=params)
         # idx = response.json()['data']['idx']
         # post_url = '{0}/api/feed/@{1}/obs.en.json'.format(aqi_api_url, idx)

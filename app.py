@@ -273,12 +273,17 @@ def handle_text_message(event):
     if m is not None:
         place_name = m.group(1)
         weather_data = weather.get_weather_data(place_name)
-        if isinstance(weather_data, str):
+        weather_aqi_data = weather.get_weather_aqi_by_place_name(place_name)
+        if isinstance(weather_data, str) or isinstance(weather_aqi_data, str):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=weather_data))
         else:
-            bubble_container = weather.get_weather_message(weather_data)
-            line_bot_api.reply_message(event.reply_token, FlexSendMessage(alt_text="Weather Forecast",
-                                                                          contents=bubble_container))
+            messages = []
+            weather_msg = weather.get_weather_message(weather_data)
+            messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=weather_msg))
+            weather_aqi_msg = weather.get_weather_aqi_message(weather_aqi_data)
+            print(weather_aqi_msg)
+            messages.append(weather_aqi_msg)
+            line_bot_api.reply_message(event.reply_token, messages=messages)
 
     n = re.match('flight (.*)', text.lower())
     if n is not None:
