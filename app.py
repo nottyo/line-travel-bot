@@ -103,7 +103,10 @@ def push_aqi():
     print('====== PUSH AQI TO: {} ======='.format(to))
     aqi_data = weather.get_weather_aqi(lat, lng)
     aqi_flex_message = weather.get_weather_aqi_message(aqi_data)
-    line_bot_api.push_message(to=to, messages=aqi_flex_message)
+    messages = []
+    messages.append(aqi_flex_message)
+    messages.append(TextSendMessage(text='You can share your location to me to get more accurate data krub :)'))
+    line_bot_api.push_message(to=to, messages=messages)
     return jsonify({
         'status': 'ok'
     })
