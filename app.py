@@ -209,6 +209,23 @@ def handle_postback_event(event):
         else:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I could\'t find airport information for {0}'.format(airport_code)))
             
+    if 'aqi_daily' in data:
+        station_id = data.split('=')[1]
+        weather_aqi_forecast = weather.get_weather_aqi_forecast(station_id)
+        flex_message = weather.get_weather_aqi_daily_message(weather_aqi_forecast)
+        line_bot_api.reply_message(event.reply_token, messages=flex_message)
+    
+    if 'aqi_statement' in data:
+        level = data.split('=')[1]
+        cautionary_statement = {
+            '1': 'None',
+            '2': 'Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.',
+            '3': 'Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.',
+            '4': 'Active children and adults, and people with respiratory disease, such as asthma, should avoid prolonged outdoor exertion; everyone else, especially children, should limit prolonged outdoor exertion',
+            '5': 'Active children and adults, and people with respiratory disease, such as asthma, should avoid all outdoor exertion; everyone else, especially children, should limit outdoor exertion.',
+            '6': 'Everyone should avoid all outdoor exertion'
+        }
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=cautionary_statement[level]))
 
 def print_source(event):
     if isinstance(event.source, SourceUser):

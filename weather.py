@@ -5,8 +5,9 @@ import sys
 import json
 import pytz
 import time
+import dateutil.parser
 from linebot.models import (
-    BubbleContainer, FlexSendMessage, TextSendMessage, TextMessage
+    BubbleContainer, FlexSendMessage, TextSendMessage, TextMessage, CarouselContainer
 )
 
 weather_forecast_url = 'https://api.weatherbit.io/v2.0'
@@ -93,23 +94,131 @@ class Weather:
         params = {
             'token': aqi_api_token
         }
-        print('weather_aqi_url: {0}'.format(url))
         response = requests.get(url, params=params)
-        # idx = response.json()['data']['idx']
-        # post_url = '{0}/api/feed/@{1}/obs.en.json'.format(aqi_api_url, idx)
-        # post_headers = {
-        #     'content-type': 'application/x-www-form-urlencoded'
-        # }
-        # post_body = {
-        #     'token': aqi_api_token,
-        #     'uid': 'QKyXD{0}'.format(int(time.time())),
-        #     'rqc': '2'
-        # }
-        # print('post_body: {0}'.format(post_body))
-        # resp = requests.post(post_url, headers=post_headers, data=post_body)
-        # resp_json = resp.json()
-        # print(json.dumps(resp_json))
         return response.json()
+    
+    def _normalize_aqi_forecast_data(self, aqi_forecast_data):
+        msg = aqi_forecast_data['rxs']['obs'][0]['msg']
+        normalized_data = {
+            'station_name': msg['city']['name'],
+            'station_link': msg['city']['url'],
+            'aqi': msg['aqi'],
+            'aqi_forecast': []
+        }
+        for af in msg['forecast']['aqi']:
+            dt = dateutil.parser.parse(af['t'])
+            date_str = dt.date().strftime('%Y-%m-%d')
+            if not any(d['date'] == date_str for d in normalized_data['aqi_forecast']):
+                  normalized_data['aqi_forecast'].append(
+                      {
+                          'date': date_str,
+                          'min': af['v'][0],
+                          'max': af['v'][1]
+                      }
+                  )
+            else:
+                for d in normalized_data['aqi_forecast']:
+                    if d['date'] == date_str and af['v'][0] < d['min']:
+                        d['min'] = af['v'][0]
+                    if d['date'] == date_str and af['v'][1] > d['max']:
+                        d['max'] = af['v'][1]
+        return normalized_data
+    
+    def get_weather_aqi_forecast(self, station_id):
+        url = '{0}/api/feed/@{1}/obs.en.json'.format(aqi_api_url, station_id)
+        data = {
+            'token': aqi_api_token,
+            'uid': 'QKyXD1548496535374',
+            'rqc': '2'
+        }
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'
+        }
+        response = requests.post(url, data=data, headers=headers)
+        return self._normalize_aqi_forecast_data(response.json())
+    
+    def get_weather_aqi_daily_message(self, daily_data):
+        flex_carousel = {
+            "type": "carousel",
+            "contents": []
+        }
+        for af in daily_data['aqi_forecast']:
+            current_date = datetime.now().date().strftime('%Y-%m-%d')
+            if af['date'] < current_date:
+                continue
+            if af['max'] > 0 and af['max'] <= 50:
+                bg_color = '#009966'
+                aqi_level_text = 'Good'
+                text_color = '#ffffff'
+            elif af['max'] > 50 and af['max'] <= 100:
+                bg_color = '#ffde33'
+                aqi_level_text = 'Moderate'
+                text_color = '#000000'
+            elif af['max'] > 100 and af['max'] <= 150:
+                bg_color = '#ff9933'
+                aqi_level_text = 'Unhealthy for Sensitive Groups'
+                text_color = '#000000'
+            elif af['max'] > 150 and af['max'] <= 200:
+                bg_color = '#cc0033'
+                aqi_level_text = 'Unhealthy'
+                text_color = '#ffffff'
+            elif af['max'] > 200 and af['max'] <= 300:
+                bg_color = '#660099'
+                aqi_level_text = 'Very Unhealthy'
+                text_color = '#ffffff'
+            elif af['max'] > 300:
+                bg_color = '#7e0023'
+                aqi_level_text = 'Hazardous'
+                text_color = '#ffffff'
+            bubble = {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "md",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": self._format_date(af['date'], to_format='%a, %-d %b %Y'),
+                            "size": "md",
+                            "color": text_color,
+                            "weight": "bold"
+                        },
+                        {
+                            "type": "text",
+                            "text": daily_data['station_name'],
+                            "size": "xs",
+                            "color": text_color,
+                            "wrap": True
+                        },
+                        {
+                            "type": "text",
+                            "text": "{0} ~ {1}".format(af['min'], af['max']),
+                            "size": "3xl",
+                            "wrap": True,
+                            "color": text_color,
+                            "weight": "bold"
+                        },
+                        {
+                            "type": "text",
+                            "text": aqi_level_text,
+                            "wrap": True,
+                            "color": text_color,
+                            "size": "sm"
+                        }
+                    ]
+                },
+                "styles": {
+                    "body": {
+                    "backgroundColor": bg_color
+                    }
+                }
+            }
+            flex_carousel['contents'].append(bubble)
+        carousel_msg = CarouselContainer.new_from_json_dict(flex_carousel)
+        return FlexSendMessage(alt_text='AQI Daily Forecast', contents=carousel_msg)
+
 
     def _format_date(self, date_str, from_format="%Y-%m-%d", to_format="%a, %-d %b"):
         dt = datetime.strptime(date_str, from_format)
@@ -566,6 +675,33 @@ class Weather:
                     }
                     ]
                 }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "postback",
+                            "label": "See Daily Forecast",
+                            "data": "aqi_daily?station_id={0}".format(data['idx']),
+                            "displayText": "AQI Daily Forecast"
+                        }
+                    },
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "postback",
+                            "label": "Cautionary Statement",
+                            "data": "aqi_statement?level={0}".format(aqi_level),
+                            "displayText": "Cautionary Statement for Air Pollution Level: \"{0}\"".format(aqi_level_text)
+                        }
+                    }
                 ]
             },
             "styles": {
