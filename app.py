@@ -101,11 +101,11 @@ def push_aqi():
     lat = request.args.get('lat')
     lng = request.args.get('lng')
     print('====== PUSH AQI TO: {} ======='.format(to))
-    aqi_data = weather.get_weather_aqi(lat, lng)
-    aqi_flex_message = weather.get_weather_aqi_message(aqi_data)
+    weather_aqi_data = weather.get_weather_aqi(lat, lng)
+    weather.get_weather_aqi_message_v2(weather_aqi_data)
+    weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
     messages = []
-    messages.append(aqi_flex_message)
-    messages.append(TextSendMessage(text='You can share your location to me to get more accurate data krub :)'))
+    messages.append(weather_aqi_msg_v2)
     line_bot_api.push_message(to=to, messages=messages)
     return jsonify({
         'status': 'ok'
@@ -141,9 +141,10 @@ def handle_location_message(event):
     weather_message = weather.get_weather_message(weather_data)
     messages = []
     messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=weather_message))
-    aqi_data = weather.get_weather_aqi(event.message.latitude, event.message.longitude)
-    aqi_message = weather.get_weather_aqi_message(aqi_data)
-    messages.append(aqi_message)
+    weather_aqi_data = weather.get_weather_aqi(event.message.latitude, event.message.longitude)
+    weather.get_weather_aqi_message_v2(weather_aqi_data)
+    weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
+    messages.append(weather_aqi_msg_v2)
     line_bot_api.reply_message(event.reply_token, messages=messages)
 
 
@@ -214,21 +215,10 @@ def handle_postback_event(event):
             
     if 'aqi_daily' in data:
         station_id = data.split('=')[1]
-        weather_aqi_forecast = weather.get_weather_aqi_forecast(station_id)
+        weather_aqi_forecast_raw = weather.get_weather_aqi_forecast(station_id)
+        weather_aqi_forecast = weather._normalize_aqi_forecast_data(weather_aqi_forecast_raw)
         flex_message = weather.get_weather_aqi_daily_message(weather_aqi_forecast)
         line_bot_api.reply_message(event.reply_token, messages=flex_message)
-    
-    if 'aqi_statement' in data:
-        level = data.split('=')[1]
-        cautionary_statement = {
-            '1': 'None',
-            '2': 'Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.',
-            '3': 'Active children and adults, and people with respiratory disease, such as asthma, should limit prolonged outdoor exertion.',
-            '4': 'Active children and adults, and people with respiratory disease, such as asthma, should avoid prolonged outdoor exertion; everyone else, especially children, should limit prolonged outdoor exertion',
-            '5': 'Active children and adults, and people with respiratory disease, such as asthma, should avoid all outdoor exertion; everyone else, especially children, should limit outdoor exertion.',
-            '6': 'Everyone should avoid all outdoor exertion'
-        }
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=cautionary_statement[level]))
 
 def print_source(event):
     if isinstance(event.source, SourceUser):
@@ -300,9 +290,11 @@ def handle_text_message(event):
             messages = []
             weather_msg = weather.get_weather_message(weather_data)
             messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=weather_msg))
-            weather_aqi_msg = weather.get_weather_aqi_message(weather_aqi_data)
-            print(weather_aqi_msg)
-            messages.append(weather_aqi_msg)
+            # weather_aqi_msg = weather.get_weather_aqi_message(weather_aqi_data)
+            # messages.append(weather_aqi_msg)
+            weather.get_weather_aqi_message_v2(weather_aqi_data)
+            weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
+            messages.append(weather_aqi_msg_v2)
             line_bot_api.reply_message(event.reply_token, messages=messages)
 
     n = re.match('flight (.*)', text.lower())

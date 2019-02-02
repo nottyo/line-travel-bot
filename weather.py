@@ -18,6 +18,8 @@ aqi_api_url = os.getenv('WEATHER_AQI_API', None)
 weather_api_key = os.getenv('WEATHER_API_KEY', None)
 geocode_api_key = os.getenv('GEOCODE_API_KEY', None)
 
+user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'
+
 if weather_api_key is None:
     print('Specify WEATHER_API_KEY in environment variable')
     sys.exit(1)
@@ -100,7 +102,7 @@ class Weather:
     def _normalize_aqi_forecast_data(self, aqi_forecast_data):
         msg = aqi_forecast_data['rxs']['obs'][0]['msg']
         normalized_data = {
-            'station_name': msg['city']['name'],
+            'station_name': msg['i18n']['name']['en'],
             'station_link': msg['city']['url'],
             'aqi': msg['aqi'],
             'aqi_forecast': []
@@ -133,10 +135,10 @@ class Weather:
         }
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36'
+            'User-Agent': user_agent
         }
         response = requests.post(url, data=data, headers=headers)
-        return self._normalize_aqi_forecast_data(response.json())
+        return response.json()
     
     def get_weather_aqi_daily_message(self, daily_data):
         flex_carousel = {
@@ -543,44 +545,421 @@ class Weather:
             )
         return BubbleContainer.new_from_json_dict(bubble)
 
+    
+    def _check_aqi_level(self, aqi):
+        aqi = int(aqi)
+        result = {
+            'level': '-1',
+            'level_text': 'Unknown',
+            'level_text_color': '#ffffff',
+            'level_image': 'https://i.imgur.com/SD87jjB.png',
+            'outdoor': {
+                'image': 'https://i.imgur.com/IEwBqbv.png',
+                'text': 'Unknown'
+            },
+            'mask': {
+                'image': 'https://i.imgur.com/7vFN3AZ.png',
+                'text': 'Unknown'
+            }
+        }
+        if aqi >= 0 and aqi <= 50:
+            # green
+            result['level'] = '1'
+            result['level_text'] = 'Good'
+            result['level_text_color'] = '#1ABC9C'
+            result['level_image'] = 'https://i.imgur.com/SD87jjB.png'
+            result['outdoor']['text'] = 'No Risk'
+            #'outdoor.image': 'https://i.imgur.com/krsW5US.png',
+            result['mask']['text'] = 'Not Needed'
+        elif aqi > 50 and aqi <= 100:
+            # yellow
+            result['level'] = '2'
+            result['level_text'] = 'Moderate'
+            result['level_text_color'] = '#f1c40f'
+            result['level_image'] = 'https://i.imgur.com/vxX2nVF.png'
+            result['outdoor']['text'] = 'People with respiratory disease should limit outdoor exertion'
+            # 'outdor.image': 'https://i.imgur.com/uUQumwh.png',
+            result['mask']['text'] = 'Recommended for People with respiratory disease'
+        elif aqi > 100 and aqi <= 150:
+            # orange
+            result['level'] = '3'
+            result['level_text'] = 'Unhealthy for Sensitive Groups'
+            result['level_text_color'] = '#e67e22'
+            # result['level_image'] = 'https://i.imgur.com/i5YnK6H.png'
+            result['level_image'] = 'https://i.imgur.com/y7O7bvz.png'
+            result['outdoor']['text'] = 'People with respiratory disease should limit outdoor exertion'
+            #'outdoor.image': 'https://i.imgur.com/2MFtPg3.png',
+            result['mask']['text'] = 'Recommended'
+        elif aqi > 150 and aqi <= 200:
+            # red
+            result['level'] = '4'
+            result['level_text'] = 'Unhealthy'
+            result['level_text_color'] = '#e74c3c'
+            result['level_image'] = 'https://i.imgur.com/DQE2DOJ.png'
+            result['outdoor']['text'] = 'Everyone should limit outdoor exertion'
+            # 'outdoor.image': 'https://i.imgur.com/m4Sve1v.png',
+            result['mask']['text'] = 'Recommended'
+        elif aqi > 200 and aqi < 300:
+            # purple
+            result['level'] = '5'
+            result['level_text'] = 'Very Unhealthy'
+            result['level_text_color'] = '#9b59b6'
+            result['level_image'] = 'https://i.imgur.com/YHQoI3i.png'
+            result['outdoor']['text'] = 'Everyone, esp children should limit outdoor exertion'
+            # 'image': 'https://i.imgur.com/IZdDkkn.png',
+            result['mask']['text'] = 'A Must'
+        elif aqi >= 300:
+            # dark red
+            result['level'] = '6'
+            result['level_text'] = 'Hazardous'
+            result['level_text_color'] = '#902E46'
+            result['level_image'] = 'https://i.imgur.com/VLAKdFj.png'
+            result['outdoor']['text'] = 'Everyone should avoid all outdoor exertion'
+            # 'outdoor.image': 'https://i.imgur.com/LFj1um8.png',
+            result['mask']['text'] = 'A Must'
+        return result
+
+    def get_iaqi_by_param(self, iaqi_list, param_name):
+        result = dict()
+        result['current'] = '-'
+        result['min'] = '-'
+        result['max'] = '-'
+        result['param'] = 'unknown'
+        for data in iaqi_list:
+            if data['p'] == param_name:
+                result['param'] = data['p']
+                result['current'] = data['v'][0]
+                result['min'] = data['v'][1]
+                result['max'] = data['v'][2]
+        return result
+
+    def _normalize_aqi_detail_data_v2(self, data):
+        result = dict()
+        msg = data['rxs']['obs'][0]['msg'] 
+        result['station_name'] = msg['i18n']['name']['en']
+        result['more_details_link'] = msg['city']['url']
+        result['aqi'] = msg['aqi']
+        result['level'] = self._check_aqi_level(result['aqi'])
+        result['last_updated'] = 'Updated: {0}'.format(self._format_date(msg['time']['utc']['s'], 
+                from_format='%Y-%m-%d %H:%M:%S', to_format='%a, %-d %b %Y %H:%M'))
+        result['wind_speed'] = self.get_iaqi_by_param(msg['iaqi'] ,'w')
+        result['pm25'] = self.get_iaqi_by_param(msg['iaqi'], 'pm25')
+        return result
+    
+    def get_weather_aqi_message_v2(self, weather_aqi_data):
+        data = weather_aqi_data['data']
+        detail_data = self.get_weather_aqi_forecast(data['idx'])
+        normalized_data = self._normalize_aqi_detail_data_v2(detail_data)
+        normalized_data['idx'] = data['idx']
+        bubble = {
+            "type": "bubble",
+            "direction": "ltr",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "spacing": "sm",
+                        "contents": [
+                            {
+                                "type": "box",
+                                "layout": "baseline",
+                                "spacing": "sm",
+                                "contents": [
+                                    {
+                                        "type": "icon",
+                                        "url": "https://i.imgur.com/m0st7TA.png",
+                                        "size": "xs"
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": normalized_data['station_name'],
+                                        "size": "xs",
+                                        "color": "#C1C4C5",
+                                        "wrap": True
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "separator"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "vertical",
+                                "contents": [
+                                    {
+                                        "type": "box",
+                                        "layout": "horizontal",
+                                        "contents": [
+                                            {
+                                                "type": "image",
+                                                "url": normalized_data['level']['level_image'],
+                                                "size": "xs"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": '{}'.format(normalized_data['aqi']),
+                                                "size": "4xl",
+                                                "gravity": "top",
+                                                "color": normalized_data['level']['level_text_color']
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": normalized_data['level']['level_text'],
+                                        "align": "center",
+                                        "color": normalized_data['level']['level_text_color']
+                                    },
+                                    {
+                                        "type": "text",
+                                        "text": normalized_data['last_updated'],
+                                        "size": "xs",
+                                        "align": "center",
+                                        "color": "#C1C4C5"
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "separator"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "spacing": "md",
+                                "contents": [
+                                    {
+                                        "type": "image",
+                                        "url": "https://i.imgur.com/bHg8stH.png",
+                                        "flex": 0,
+                                        "align": "start",
+                                        "gravity": "top",
+                                        "size": "xxs"
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "PM 2.5 (Today)",
+                                                "size": "xs",
+                                                "align": "start",
+                                                "color": "#C1C4C5"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "{0} ~ {1} μg/m3".format(normalized_data['pm25']['min'], normalized_data['pm25']['max']),
+                                                "size": "xs",
+                                                "color": "#C1C4C5"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "separator"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "spacing": "md",
+                                "contents": [
+                                    {
+                                        "type": "image",
+                                        "url": "https://i.imgur.com/8Tb1qXF.png",
+                                        "flex": 0,
+                                        "align": "start",
+                                        "gravity": "top",
+                                        "size": "xxs"
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "Wind Speed",
+                                                "size": "xs",
+                                                "align": "start",
+                                                "color": "#C1C4C5"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": "{0} m/s".format(normalized_data['wind_speed']['current']),
+                                                "size": "xs",
+                                                "color": "#C1C4C5"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "separator"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "spacing": "md",
+                                "contents": [
+                                    {
+                                        "type": "image",
+                                        "url": "https://i.imgur.com/uUQumwh.png",
+                                        "flex": 0,
+                                        "align": "start",
+                                        "gravity": "top",
+                                        "size": "xxs"
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "Outdoor Exertion",
+                                                "size": "xs",
+                                                "align": "start",
+                                                "color": "#C1C4C5"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": normalized_data['level']['outdoor']['text'],
+                                                "size": "xs",
+                                                "color": normalized_data['level']['level_text_color'],
+                                                "wrap": True
+                                            }
+                                        ]
+                                    }
+                                ]
+                            },
+                            {
+                                "type": "separator"
+                            },
+                            {
+                                "type": "box",
+                                "layout": "horizontal",
+                                "spacing": "md",
+                                "contents": [
+                                    {
+                                        "type": "image",
+                                        "url": "https://i.imgur.com/7vFN3AZ.png",
+                                        "flex": 0,
+                                        "align": "start",
+                                        "gravity": "top",
+                                        "size": "xxs"
+                                    },
+                                    {
+                                        "type": "box",
+                                        "layout": "vertical",
+                                        "contents": [
+                                            {
+                                                "type": "text",
+                                                "text": "Hygienic Mask",
+                                                "size": "xs",
+                                                "align": "start",
+                                                "color": "#C1C4C5"
+                                            },
+                                            {
+                                                "type": "text",
+                                                "text": normalized_data['level']['mask']['text'],
+                                                "size": "xs",
+                                                "color": normalized_data['level']['level_text_color'],
+                                                "wrap": True
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "footer": {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {
+                        "type": "box",
+                        "layout": "vertical",
+                        "spacing": "md",
+                        "contents": [
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "uri",
+                                    "label": "More Details",
+                                    "uri": normalized_data['more_details_link']
+                                },
+                                "color": normalized_data['level']['level_text_color'],
+                                "style": "secondary"
+                            },
+                            {
+                                "type": "button",
+                                "action": {
+                                    "type": "postback",
+                                    "label": "Daily Forecast",
+                                    "text": "Daily Forecast",
+                                    "data": "aqi_daily?station_id={0}".format(normalized_data['idx'])
+                                },
+                                "color": normalized_data['level']['level_text_color'],
+                                "style": "secondary"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "styles": {
+                "body": {
+                    "backgroundColor": "#033C5A"
+                },
+                "footer": {
+                    "backgroundColor": "#033C5A"
+                }
+            }
+        }
+        flex_message = BubbleContainer.new_from_json_dict(bubble)
+        return FlexSendMessage(alt_text='Air Quality Index', contents=flex_message)
+
+    
     def get_weather_aqi_message(self, weather_aqi_data):
         data = weather_aqi_data['data']
         aqi_last = int(data['aqi'])
         aqi_level = 1
-        img_logo_url = ''
         bg_color = '#FFFF00'
         aqi_level_text = 'Moderate'
         msg_text = ''
         if aqi_last > 0 and aqi_last <= 50:
-            img_logo_url += 'https://i.imgur.com/35KrVow.png'
             bg_color = '#009966'
             aqi_level_text = 'Good'
             aqi_level = 1
+            text_color = '#ffffff'
         elif aqi_last > 50 and aqi_last <= 100:
-            img_logo_url += 'https://i.imgur.com/CSa1YMU.png'
             bg_color = '#ffde33'
             aqi_level_text = 'Moderate'
             aqi_level = 2
+            text_color = '#000000'
         elif aqi_last > 100 and aqi_last <= 150:
-            img_logo_url += 'https://i.imgur.com/jaBgWYt.png'
             bg_color = '#ff9933'
             aqi_level_text = 'Unhealthy for Sensitive Groups'
             aqi_level = 3
+            text_color = '#000000'
         elif aqi_last > 150 and aqi_last <= 200:
-            img_logo_url += 'https://i.imgur.com/EZQO623.png'
             bg_color = '#cc0033'
             aqi_level_text = 'Unhealthy'
             aqi_level = 4
+            text_color = '#ffffff'
         elif aqi_last > 200 and aqi_last <= 300:
-            img_logo_url += 'https://i.imgur.com/jJdrpp0.png'
             bg_color = '#660099'
             aqi_level_text = 'Very Unhealthy'
             aqi_level = 5
+            text_color = '#ffffff'
         elif aqi_last > 300:
-            img_logo_url += 'https://i.imgur.com/jJdrpp0.png'
             bg_color = '#7e0023'
             aqi_level_text = 'Hazardous'
             aqi_level = 6
+            text_color = '#ffffff'
         bubble = {
             "type": "bubble",
             "direction": "ltr",
@@ -596,9 +975,9 @@ class Weather:
                         "type": "text",
                         "text": data['city']['name'],
                         "align": "center",
+                        "size": "md",
                         "wrap": True,
-                        "weight": "bold",
-                        "color": "#FFFFFF",
+                        "color": "#ffffff",
                         "action": {
                             "type": "uri",
                             "label": "AQI Description",
@@ -610,7 +989,7 @@ class Weather:
                         "text": data['time']['s'],
                         "size": "xs",
                         "align": "center",
-                        "color": "#FFFFFF",
+                        "color": "#ffffff",
                         "action": {
                             "type": "uri",
                             "label": "AQI Description",
@@ -622,7 +1001,7 @@ class Weather:
                         "text": 'Click me to see more detail',
                         "size": "xs",
                         "align": "center",
-                        "color": "#FFFFFF"
+                        "color": "#ffffff"
                     }
                     ]
                     
@@ -644,13 +1023,13 @@ class Weather:
                         "contents": [
                         {
                             "type": "text",
-                            "text": "Air Quality Index PM 2.5",
-                            "size": "xl",
+                            "text": "Air Quality Index",
+                            "size": "lg",
                             "align": "center",
                             "gravity": "top",
                             "wrap": True,
                             "weight": "bold",
-                            "color": "#000000"
+                            "color": text_color
                         },
                         {
                             "type": "text",
@@ -660,7 +1039,7 @@ class Weather:
                             "gravity": "top",
                             "wrap": True,
                             "weight": "bold",
-                            "color": "#000000"
+                            "color": text_color
                         },
                         {
                             "type": "text",
@@ -669,7 +1048,7 @@ class Weather:
                             "weight": "bold",
                             "wrap": True,
                             "align": "center",
-                            "color": "#000000"
+                            "color": text_color
                         }
                         ]
                     }
