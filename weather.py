@@ -806,7 +806,9 @@ class Weather:
                                 "contents": [
                                     {
                                         "type": "image",
-                                        "url": "https://i.imgur.com/uUQumwh.png",
+                                        # "url": "https://i.imgur.com/uUQumwh.png",
+                                        # "url": "https://i.imgur.com/onXsTU2.png",
+                                        "url": "https://i.imgur.com/p5oOfCK.png",
                                         "flex": 0,
                                         "align": "start",
                                         "gravity": "top",
@@ -844,7 +846,7 @@ class Weather:
                                 "contents": [
                                     {
                                         "type": "image",
-                                        "url": "https://i.imgur.com/7vFN3AZ.png",
+                                        "url": "https://i.imgur.com/dpE8K8d.png",
                                         "flex": 0,
                                         "align": "start",
                                         "gravity": "top",
