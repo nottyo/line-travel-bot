@@ -32,12 +32,12 @@ headers = {
 class FlightApi(object):
 
     def get_latest_flight(self, flight_no):
-        current_milli_time = int(round(time.time() * 1000))
-        url = '{0}/endpoints/playback/previousFlights.php?fn={1}&_={2}'.format(api_host, flight_no, current_milli_time)
+        # current_milli_time = int(round(time.time() * 1000))
+        url = '{0}/api/aircraft/historic/flights/flightNo/{1}'.format(api_host, flight_no)
         response = requests.get(url, headers=headers)
         resp_json = response.json()
-        if resp_json['flights'] is not False and len(resp_json['flights']) > 0:
-            return resp_json['flights'][0]
+        if resp_json['success'] is True and len(resp_json['payload']) > 0:
+            return resp_json['payload'][0]
         return None
 
     def get_country_code_flag(self, name):
@@ -61,16 +61,8 @@ class FlightApi(object):
         }
     
     def get_flight_metadata(self, flight_no, adshex):
-        url = '{0}/api/api.php'.format(api_host)
-        params = {
-            'r': 'aircraftMetadata',
-            'adshex': adshex,
-            'flightno': flight_no,
-            'type': '0',
-            'isPlayback': '0',
-            'isPoll': '0'
-        }
-        response = requests.get(url, params=params)
+        url = '{0}/api/aircraft/historic/data/0/{1}/{2}'.format(api_host, adshex, flight_no)
+        response = requests.get(url, headers=headers)
         return response.json()
 
     def _convert_epoch_to_hm(self, format, epoch, next_day=False):
@@ -109,7 +101,7 @@ class FlightApi(object):
         body = {
             'gram': flight_no
         }
-        response = requests.post(url, params=params, json=body)
+        response = requests.post(url, params=params, json=body, headers=headers)
         flights = response.json()
         for flight in flights:
             if flight['_source']['name'] == flight_no:
@@ -123,9 +115,9 @@ class FlightApi(object):
         return None
     
 
-    def create_flight_message(self, flight_no, adshex, flight_metadata):
-        departure_airport = flight_metadata['flightData']['departureApt']
-        arrival_airport = flight_metadata['flightData']['arrivalApt']
+    def create_flight_message(self, flight_no, adshex, payload):
+        departure_airport = payload['static']['departureApt']
+        arrival_airport = payload['static']['arrivalApt']
         bubble = {
             "type": "bubble",
             "direction": "ltr",
@@ -135,7 +127,7 @@ class FlightApi(object):
                 "contents": [
                     {
                         "type": "text",
-                        "text": "{0} - {1}".format(flight_no, flight_metadata['aircraftData']['aicraftOperator']).upper(),
+                        "text": "{0} - {1}".format(flight_no, payload['aircraft']['aircraftOperator']).upper(),
                         "size": "sm",
                         "wrap": True,
                         "align": "center",
@@ -164,7 +156,7 @@ class FlightApi(object):
                             "contents": [
                                 {
                                     "type": "text",
-                                    "text": flight_metadata['airportDetail'][departure_airport]['airportCity'],
+                                    "text": self.get_airport_name_from_code(payload['static']['departureApt'])['city'],
                                     "align": "start",
                                     "gravity": "top",
                                     "wrap": True
@@ -192,7 +184,7 @@ class FlightApi(object):
                             "contents": [
                                 {
                                     "type": "text",
-                                    "text": flight_metadata['airportDetail'][arrival_airport]['airportCity'],
+                                    "text": self.get_airport_name_from_code(payload['static']['arrivalApt'])['city'],
                                     "align": "end",
                                     "gravity": "top",
                                     "wrap": True
@@ -222,37 +214,28 @@ class FlightApi(object):
             }
         }
 
-        if flight_metadata['photos'] is not None:
+        if payload['photos'] is not None:
             bubble['hero'] = {
                 "type": "image",
-                "url": flight_metadata['photos'][0]['thumbnailPath'],
+                "url": payload['photos'][0]['url'],
                 "size": "full",
                 "aspectRatio": "1.51:1",
                 "aspectMode": "cover"
             }
-        else:
-            bubble['hero'] = {
-                "type": "image",
-                "url": "{0}/v1/getImage.php?airlineCode={1}&aircraftType={2}".format(image_host, flight_metadata['aircraftData']['airlineICAO'], flight_metadata['aircraftData']['typeCode']),
-                "size": "full",
-                "aspectRatio": "1.91:1",
-                "aspectMode": "fit",
-                "backgroundColor": "#5290CC"
-            }
         
-        if flight_metadata['statusData']['depSchdLOC'] is None:
+        if payload['status']['depSchdLOC'] is None:
             flight_schedule = self.get_flight_schedule(flight_no)
             print('flight_schedule: {0}'.format(flight_schedule))
             if flight_schedule is not None:
-                flight_metadata['statusData']['depSchdLOC'] = flight_schedule['departureTime']
-                flight_metadata['statusData']['depOffset'] = flight_schedule['departureTZOffset']
-                flight_metadata['statusData']['arrSchdLOC'] = flight_schedule['arrivalTime']
-                flight_metadata['statusData']['arrOffset'] = flight_schedule['arrivalTZOffset']
+                payload['status']['depSchdLOC'] = flight_schedule['departureTime']
+                payload['status']['depOffset'] = flight_schedule['departureTZOffset']
+                payload['status']['arrSchdLOC'] = flight_schedule['arrivalTime']
+                payload['status']['arrOffset'] = flight_schedule['arrivalTZOffset']
                 next_day = flight_schedule['isNextDay']
 
-        if flight_metadata['statusData']['depSchdLOC'] is not None:
+        if payload['status']['depSchdLOC'] is not None:
             next_day = False
-            if flight_metadata['flightData']['arrivalDay'] == 'Next day':
+            if payload['static']['arrivalDay'] == 'Next day':
                 next_day = True
             bubble['body']['contents'][0]['contents'].extend(
                 (
@@ -284,13 +267,13 @@ class FlightApi(object):
                         "contents": [
                             {
                             "type": "text",
-                            "text": self._convert_epoch_to_hm(hmp_format, flight_metadata['statusData']['depSchdLOC'], False),
+                            "text": self._convert_epoch_to_hm(hmp_format, payload['status']['depSchdLOC'], False),
                             "size": "xs",
                             "weight": "bold"
                             },
                             {
                             "type": "text",
-                            "text": self._convert_epoch_to_hm(hmp_format, flight_metadata['statusData']['arrSchdLOC'], next_day),
+                            "text": self._convert_epoch_to_hm(hmp_format, payload['status']['arrSchdLOC'], next_day),
                             "size": "xs",
                             "align": "end",
                             "weight": "bold"
@@ -303,12 +286,12 @@ class FlightApi(object):
                         "contents": [
                             {
                             "type": "text",
-                            "text": "UTC+{0}".format(self._convert_epoch_to_hm(hm_format, flight_metadata['statusData']['depOffset'])) if flight_metadata['statusData']['depOffset'] > 0 else "UTC-{0}".format(self._convert_epoch_to_hm(hm_format, flight_metadata['statusData']['depOffset'])),
+                            "text": "UTC+{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['depOffset'])) if payload['status']['depOffset'] > 0 else "UTC-{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['depOffset'])),
                             "size": "xs"
                             },
                             {
                             "type": "text",
-                            "text": "UTC+{0}".format(self._convert_epoch_to_hm(hm_format, flight_metadata['statusData']['arrOffset'])) if flight_metadata['statusData']['arrOffset'] > 0 else "UTC-{0}".format(self._convert_epoch_to_hm(hm_format, flight_metadata['statusData']['arrOffset'])),
+                            "text": "UTC+{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['arrOffset'])) if payload['status']['arrOffset'] > 0 else "UTC-{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['arrOffset'])),
                             "size": "xs",
                             "align": "end"
                             }
@@ -339,22 +322,17 @@ class FlightApi(object):
                         },
                         {
                         "type": "text",
-                        "text": "{0} ({1})".format(flight_metadata['aircraftData']['aircraftFullType'], flight_metadata['aircraftData']['aircraftAgeString']),
+                        "text": "{0} ({1})".format(payload['aircraft']['aircraftFullType'], payload['aircraft']['aircraftAgeString']),
                         "size": "xs",
                         "color": "#545454"
                         },
                         {
                             "type": "text",
-                            "text": "Seats: {0}".format(flight_metadata['flightData']['seats']),
+                            "text": "Seats: {0}".format(payload['static']['seats']),
                             "size": "xs",
                             "color": "#545454"
                         }
                     ]
-                    },
-                    {
-                        "type": "image",
-                        "url": "{0}/v2/getLogo3x.php?airlineCode={1}&requestThumb=0&hex={2}".format(image_host, flight_metadata['aircraftData']['airlineICAO'], adshex),
-                        "size": "xs"
                     }
                 ]
             },
@@ -376,7 +354,7 @@ class FlightApi(object):
                         },
                         {
                         "type": "text",
-                        "text": flight_metadata['flightData']['departureTerminal'] if flight_metadata['flightData']['departureTerminal'] is not None else "N/A",
+                        "text": payload['status']['departureTerminal'] if payload['status']['departureTerminal'] is not None else "N/A",
                         "size": "xs",
                         "color": "#545454"
                         }
@@ -393,7 +371,7 @@ class FlightApi(object):
                         },
                         {
                         "type": "text",
-                        "text": flight_metadata['flightData']['departureGate'] if flight_metadata['flightData']['departureGate'] is not None else "N/A",
+                        "text": payload['status']['departureGate'] if payload['status']['departureGate'] is not None else "N/A",
                         "size": "xs",
                         "color": "#545454"
                         }
@@ -410,7 +388,7 @@ class FlightApi(object):
                         },
                         {
                         "type": "text",
-                        "text": flight_metadata['flightData']['journeyTime'],
+                        "text": payload['static']['journeyTime'],
                         "size": "xs",
                         "color": "#545454"
                         }
@@ -432,7 +410,7 @@ class FlightApi(object):
                         },
                         {
                         "type": "text",
-                        "text": " / ".join(flight_metadata['flightData']['codeshares']) if flight_metadata['flightData']['codeshares'] is not None else 'N/A',
+                        "text": " / ".join(payload['static']['codeshares']) if payload['static']['codeshares'] is not None else 'N/A',
                         "size": "xs",
                         "color": "#545454",
                         "wrap": True
@@ -601,7 +579,8 @@ class FlightApi(object):
             'airportCode': airport_iata,
             '_': int(round(time.time() * 1000))
         }
-        response = requests.get(url, params=params)
+        response = requests.get(url, headers=headers, params=params)
+        print(response.text)
         resp_json = response.json()['payload']
         if resp_json['departures'] is not None and resp_json['arrivals'] is not None:
             result = {}
