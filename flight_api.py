@@ -236,17 +236,14 @@ class FlightApi(object):
 
         if len(payload['photos']) > 0:
             aircraft_photo_url = payload['photos'][0]['url']
-        else:
-            aircraft_photo_url = self.get_aircraft_photo(payload['aircraft']['registration'])
-        
-        if aircraft_photo_url is not None:
-            bubble['hero'] = {
-                "type": "image",
-                "url": aircraft_photo_url,
-                "size": "full",
-                "aspectRatio": "1.51:1",
-                "aspectMode": "cover"
-            }
+            if aircraft_photo_url is not None:
+                bubble['hero'] = {
+                    "type": "image",
+                    "url": aircraft_photo_url,
+                    "size": "full",
+                    "aspectRatio": "1.51:1",
+                    "aspectMode": "cover"
+                }
         
         if payload['status']['depSchdLOC'] is None:
             flight_schedule = self.get_flight_schedule(flight_no)
