@@ -16,6 +16,8 @@ from linebot.models import (
 api_host = os.getenv('FLIGHT_API_HOST', None)
 flight_route_api_host = os.getenv('FLIGHT_ROUTE_API', None)
 image_host = os.getenv('IMAGE_URL', None)
+aircraft_photo_api = os.getenv('AIRCRAFT_PHOTO_API', None)
+aircraft_cdn = os.getenv('AIRCRAFT_CDN', None)
 hmp_format = '%H:%M %p'
 hm_format = '%H:%M'
 
@@ -30,6 +32,15 @@ headers = {
 }
 
 class FlightApi(object):
+
+    def get_aircraft_photo(self, registration_no):
+        url = '{0}/api/json/quicksearch.php?term={1}'.format(aircraft_photo_api, registration_no.upper())
+        response = requests.get(url, headers=headers)
+        resp_json = response.json()
+        if len(resp_json) > 0:
+            filename = resp_json[0]['filename']
+            return '{0}/{1}'.format(aircraft_cdn, filename)
+        return None
 
     def get_latest_flight(self, flight_no):
         # current_milli_time = int(round(time.time() * 1000))
@@ -84,7 +95,7 @@ class FlightApi(object):
     
     def _get_timezone_offset(self, iso_dt):
         dt = dateutil.parser.parse(iso_dt)
-        return dt.tzinfo.utcoffset(dt).seconds
+        return dt.strftime('%z')
     
     def _is_next_day(self, departure_iso, arrival_iso):
         departure = dateutil.parser.parse(departure_iso)
@@ -99,12 +110,13 @@ class FlightApi(object):
             'rqid': ''.join(random.choices(string.ascii_lowercase + string.digits, k=11))
         }
         body = {
-            'gram': flight_no
+            'value': flight_no
         }
         response = requests.post(url, params=params, json=body, headers=headers)
         flights = response.json()
         for flight in flights:
-            if flight['_source']['name'] == flight_no:
+            flight_name = '{0}{1}'.format(flight['_source']['carrierIata'], flight['_source']['flightNumber'])
+            if flight_name == flight_no:
                 result = {}
                 result['departureTime'] = self._convert_iso_to_epoch(flight['_source']['departureDateTime'])
                 result['departureTZOffset'] = self._get_timezone_offset(flight['_source']['departureDateTime'])
@@ -118,6 +130,7 @@ class FlightApi(object):
     def create_flight_message(self, flight_no, adshex, payload):
         departure_airport = payload['static']['departureApt']
         arrival_airport = payload['static']['arrivalApt']
+        print(json.dumps(payload))
         bubble = {
             "type": "bubble",
             "direction": "ltr",
@@ -215,9 +228,14 @@ class FlightApi(object):
         }
 
         if len(payload['photos']) > 0:
+            aircraft_photo_url = payload['photos'][0]['url']
+        else:
+            aircraft_photo_url = self.get_aircraft_photo(payload['aircraft']['registration'])
+        
+        if aircraft_photo_url is not None:
             bubble['hero'] = {
                 "type": "image",
-                "url": payload['photos'][0]['url'],
+                "url": aircraft_photo_url,
                 "size": "full",
                 "aspectRatio": "1.51:1",
                 "aspectMode": "cover"
@@ -225,7 +243,6 @@ class FlightApi(object):
         
         if payload['status']['depSchdLOC'] is None:
             flight_schedule = self.get_flight_schedule(flight_no)
-            print('flight_schedule: {0}'.format(flight_schedule))
             if flight_schedule is not None:
                 payload['status']['depSchdLOC'] = flight_schedule['departureTime']
                 payload['status']['depOffset'] = flight_schedule['departureTZOffset']
@@ -286,12 +303,12 @@ class FlightApi(object):
                         "contents": [
                             {
                             "type": "text",
-                            "text": "UTC+{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['depOffset'])) if payload['status']['depOffset'] > 0 else "UTC-{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['depOffset'])),
+                            "text": 'UTC{0}'.format(payload['status']['depOffset']),
                             "size": "xs"
                             },
                             {
                             "type": "text",
-                            "text": "UTC+{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['arrOffset'])) if payload['status']['arrOffset'] > 0 else "UTC-{0}".format(self._convert_epoch_to_hm(hm_format, payload['status']['arrOffset'])),
+                            "text": "UTC{0}".format(payload['status']['arrOffset']),
                             "size": "xs",
                             "align": "end"
                             }
