@@ -304,12 +304,8 @@ def handle_text_message(event):
             flight_metadata = flight_api.get_flight_metadata(latest_flight['flight_number'], latest_flight['adshex'])
             if flight_metadata['success'] is True:
                 flight_bubble = flight_api.create_flight_message(latest_flight['flight_number'], latest_flight['adshex'], flight_metadata['payload'])
-                image_original_url = generate_flight_map(flight_metadata['payload']['flightData']['departureApt'], flight_metadata['payload']['flightData']['arrivalApt'])
-                image_preview_url = generate_flight_map(flight_metadata['payload']['flightData']['departureApt'], flight_metadata['payload']['flightData']['arrivalApt'], '240x120')
-                image_msg = ImageSendMessage(original_content_url=image_original_url, preview_image_url=image_preview_url)
                 messages = []
                 messages.append(FlexSendMessage(alt_text="Flight Information", contents=flight_bubble))
-                messages.append(image_msg)
                 line_bot_api.reply_message(event.reply_token, messages)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I can\'t find your flight: {}. Please try another flight number'.format(n.group(1).upper())))
 

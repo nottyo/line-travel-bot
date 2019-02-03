@@ -214,7 +214,7 @@ class FlightApi(object):
             }
         }
 
-        if payload['photos'] is not None:
+        if len(payload['photos']) > 0:
             bubble['hero'] = {
                 "type": "image",
                 "url": payload['photos'][0]['url'],
@@ -433,7 +433,7 @@ class FlightApi(object):
             'searchText': query,
             'key': 'PF2202'
         }
-        response = requests.get(url, params=params)
+        response = requests.get(url, headers=headers, params=params)
         resp_json = response.json()
         return resp_json['airports'] if len(resp_json['airports']) > 0 else None
 
@@ -573,14 +573,8 @@ class FlightApi(object):
         return carousel_container
     
     def get_airport_data(self, airport_iata, limit=15):
-        url = '{0}/api/api.php'.format(api_host)
-        params = {
-            'r': 'airport',
-            'airportCode': airport_iata,
-            '_': int(round(time.time() * 1000))
-        }
-        response = requests.get(url, headers=headers, params=params)
-        print(response.text)
+        url = '{0}/api/airport/times/{1}'.format(api_host, airport_iata)
+        response = requests.get(url, headers=headers)
         resp_json = response.json()['payload']
         if resp_json['departures'] is not None and resp_json['arrivals'] is not None:
             result = {}
@@ -593,8 +587,8 @@ class FlightApi(object):
             departure_length = limit if len(resp_json['departures']) > limit else len(resp_json['departures'])
             for index in range(0, departure_length-1):
                 departure = resp_json['departures'][index]
-                departure_time = departure['estimatedDepartureTime'] if departure['estimatedDepartureTime'] is not None else departure['scheduledDepartureTime']
-                destination_airport = self.get_airport_name_from_code(departure['arrApt'])
+                departure_time = departure['estimatedTime'] if departure['estimatedTime'] is not None else departure['scheduledTime']
+                destination_airport = self.get_airport_name_from_code(departure['airport'])
                 departure_city = '{0} {1}'.format(destination_airport['country_flag'], destination_airport['city'].upper()) if destination_airport['country_flag'] is not None else destination_airport['city'].upper()
                 result['departures'].append(
                     {
@@ -607,8 +601,8 @@ class FlightApi(object):
             arrival_length = limit if len(resp_json['arrivals']) > limit else len(resp_json['arrivals'])
             for index in range(0, arrival_length-1):
                 arrival = resp_json['arrivals'][index]
-                arrival_time = arrival['scheduledArrivalTime']
-                origin_airport = self.get_airport_name_from_code(arrival['depApt'])
+                arrival_time = arrival['scheduledTime']
+                origin_airport = self.get_airport_name_from_code(arrival['airport'])
                 origin_city = '{0} {1}'.format(origin_airport['country_flag'], origin_airport['city'].upper()) if origin_airport['country_flag'] is not None else origin_airport['city'].upper()
                 result['arrivals'].append(
                     {
