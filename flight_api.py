@@ -45,7 +45,7 @@ class FlightApi(object):
             if len(resp_json) > 0:
                 filename = resp_json[0]['filename']
                 return '{0}/{1}'.format(aircraft_cdn, filename)
-        except expression as identifier:
+        except Exception:
             pass
         return None
 
