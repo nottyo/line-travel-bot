@@ -36,6 +36,7 @@ class FlightApi(object):
     def get_aircraft_photo(self, registration_no):
         url = '{0}/api/json/quicksearch.php?term={1}'.format(aircraft_photo_api, registration_no.upper())
         response = requests.get(url, headers=headers)
+        print('get_aircraf_photo: {}'.format(response.text))
         resp_json = response.json()
         if len(resp_json) > 0:
             filename = resp_json[0]['filename']
