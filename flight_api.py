@@ -35,12 +35,18 @@ class FlightApi(object):
 
     def get_aircraft_photo(self, registration_no):
         url = '{0}/api/json/quicksearch.php?term={1}'.format(aircraft_photo_api, registration_no.upper())
-        response = requests.get(url, headers=headers)
-        print('get_aircraf_photo: {}'.format(response.text))
-        resp_json = response.json()
-        if len(resp_json) > 0:
-            filename = resp_json[0]['filename']
-            return '{0}/{1}'.format(aircraft_cdn, filename)
+        cookies = {
+            'JPSESSID': 'cadodtaha6lskd338n48vk5u82'
+        }
+        try:
+            response = requests.get(url, headers=headers, cookies=cookies)
+            print('get_aircraf_photo: {}'.format(response.text))
+            resp_json = response.json()
+            if len(resp_json) > 0:
+                filename = resp_json[0]['filename']
+                return '{0}/{1}'.format(aircraft_cdn, filename)
+        except expression as identifier:
+            pass
         return None
 
     def get_latest_flight(self, flight_no):
