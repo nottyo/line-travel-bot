@@ -146,30 +146,31 @@ class Weather:
             "contents": []
         }
         for af in daily_data['aqi_forecast']:
+            af['av'] = (af['max'] + af['min'])/2
             current_date = datetime.now().date().strftime('%Y-%m-%d')
             if af['date'] < current_date:
                 continue
-            if af['max'] > 0 and af['max'] <= 50:
+            if af['av'] > 0 and af['av'] <= 50:
                 bg_color = '#009966'
                 aqi_level_text = 'Good'
                 text_color = '#ffffff'
-            elif af['max'] > 50 and af['max'] <= 100:
+            elif af['av'] > 50 and af['av'] <= 100:
                 bg_color = '#ffde33'
                 aqi_level_text = 'Moderate'
                 text_color = '#000000'
-            elif af['max'] > 100 and af['max'] <= 150:
+            elif af['av'] > 100 and af['av'] <= 150:
                 bg_color = '#ff9933'
                 aqi_level_text = 'Unhealthy for Sensitive Groups'
                 text_color = '#000000'
-            elif af['max'] > 150 and af['max'] <= 200:
+            elif af['av'] > 150 and af['av'] <= 200:
                 bg_color = '#cc0033'
                 aqi_level_text = 'Unhealthy'
                 text_color = '#ffffff'
-            elif af['max'] > 200 and af['max'] <= 300:
+            elif af['av'] > 200 and af['av'] <= 300:
                 bg_color = '#660099'
                 aqi_level_text = 'Very Unhealthy'
                 text_color = '#ffffff'
-            elif af['max'] > 300:
+            elif af['av'] > 300:
                 bg_color = '#7e0023'
                 aqi_level_text = 'Hazardous'
                 text_color = '#ffffff'
