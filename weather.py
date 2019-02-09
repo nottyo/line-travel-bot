@@ -75,20 +75,22 @@ class Weather:
         result['daily'] = daily_data['data']
         return result
 
-    def get_weather_data(self, place_name_or_latlng):
-        result = self._resolve_location_latlng(place_name_or_latlng)
-        if len(result['results']) == 0:
-            return "I couldn't find weather from your place or lat/lng: {}".format(place_name_or_latlng)
-        geometry = result['results'][0]['geometry']
-        weather_data = self.get_weather(geometry['lat'], geometry['lng'])
-        weather_data['address'] = result['results'][0]
-        return weather_data
-    
-    def get_weather_aqi_by_place_name(self, place_name):
+    def get_latlng_from_place_name(self, place_name):
         result = self._resolve_location_latlng(place_name)
         if len(result['results']) == 0:
             return "I couldn't find weather from your place or lat/lng: {}".format(place_name)
         geometry = result['results'][0]['geometry']
+        address = result['results'][0]
+        return geometry, address
+
+    def get_weather_data(self, place_name_or_latlng):
+        geometry, address = self.get_latlng_from_place_name(place_name_or_latlng)
+        weather_data = self.get_weather(geometry['lat'], geometry['lng'])
+        weather_data['address'] = address
+        return weather_data
+    
+    def get_weather_aqi_by_place_name(self, place_name):
+        geometry = self.get_latlng_from_place_name(place_name_or_latlng)
         return self.get_weather_aqi(geometry['lat'], geometry['lng'])
 
     def get_weather_aqi(self, lat, lng):

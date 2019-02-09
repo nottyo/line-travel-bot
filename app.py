@@ -4,6 +4,7 @@ from flask import Flask, request, abort, jsonify, send_from_directory
 from weather import Weather
 from places import Places
 from flight_api import FlightApi
+from aqi import WeatherAQI
 import os
 import sys
 import json
@@ -38,6 +39,7 @@ app = Flask(__name__)
 weather = Weather()
 places = Places()
 flight_api = FlightApi()
+weather_aqi = WeatherAQI()
 channel_secret = os.getenv('LINE_CHANNEL_SECRET', None)
 channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN', None)
 
@@ -101,12 +103,14 @@ def push_aqi():
     lat = request.args.get('lat')
     lng = request.args.get('lng')
     print('====== PUSH AQI TO: {} ======='.format(to))
-    weather_aqi_data = weather.get_weather_aqi(lat, lng)
-    weather.get_weather_aqi_message_v2(weather_aqi_data)
-    weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
-    messages = []
-    messages.append(weather_aqi_msg_v2)
-    line_bot_api.push_message(to=to, messages=messages)
+    aqi_station_id = weather_aqi.get_nearest_station(lat, lng)
+    if aqi_station_id is not None:
+        weather_aqi_data = weather_aqi.get_aqi_data(aqi_station_id)
+        if weather_aqi_data is not None:
+            weather_aqi_msg = weather_aqi.get_aqi_message(weather_aqi_data)
+            messages = []
+            messages.append(FlexSendMessage(alt_text='Air Quality Index', contents=weather_aqi_msg))
+            line_bot_api.push_message(to=to, messages=messages)
     return jsonify({
         'status': 'ok'
     })
@@ -141,10 +145,16 @@ def handle_location_message(event):
     weather_message = weather.get_weather_message(weather_data)
     messages = []
     messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=weather_message))
-    weather_aqi_data = weather.get_weather_aqi(event.message.latitude, event.message.longitude)
-    weather.get_weather_aqi_message_v2(weather_aqi_data)
-    weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
-    messages.append(weather_aqi_msg_v2)
+    aqi_station_id = weather_aqi.get_nearest_station(event.message.latitude, event.message.longitude)
+    if aqi_station_id is not None:
+        weather_aqi_data = weather_aqi.get_aqi_data(aqi_station_id)
+        if weather_aqi_data is not None:
+            weather_aqi_msg = weather_aqi.get_aqi_message(weather_aqi_data)
+            messages.append(FlexSendMessage(alt_text='Air Quality Index', contents=weather_aqi_msg))
+    # weather_aqi_data = weather.get_weather_aqi(event.message.latitude, event.message.longitude)
+    # weather.get_weather_aqi_message_v2(weather_aqi_data)
+    # weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
+    # messages.append(weather_aqi_msg_v2)
     line_bot_api.reply_message(event.reply_token, messages=messages)
 
 
@@ -283,18 +293,24 @@ def handle_text_message(event):
     if m is not None:
         place_name = m.group(1)
         weather_data = weather.get_weather_data(place_name)
-        weather_aqi_data = weather.get_weather_aqi_by_place_name(place_name)
-        if isinstance(weather_data, str) or isinstance(weather_aqi_data, str):
+        latlng_data, address = weather.get_latlng_from_place_name(place_name)
+        # weather_aqi_data = weather.get_weather_aqi_by_place_name(place_name)
+        weather_aqi_station_id = weather_aqi.get_nearest_station(latlng_data['lat'], latlng_data['lng'])
+        weather_aqi_data = weather_aqi.get_aqi_data(weather_aqi_station_id)
+        if isinstance(weather_data, str):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=weather_data))
         else:
             messages = []
             weather_msg = weather.get_weather_message(weather_data)
             messages.append(FlexSendMessage(alt_text="Weather Forecast", contents=weather_msg))
+            if weather_aqi_data is not None:
+                weather_aqi_msg = weather_aqi.get_aqi_message(weather_aqi_data)
+                messages.append(FlexSendMessage(alt_text="Air Quality Index", contents=weather_aqi_msg))
             # weather_aqi_msg = weather.get_weather_aqi_message(weather_aqi_data)
             # messages.append(weather_aqi_msg)
-            weather.get_weather_aqi_message_v2(weather_aqi_data)
-            weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
-            messages.append(weather_aqi_msg_v2)
+            # weather.get_weather_aqi_message_v2(weather_aqi_data)
+            # weather_aqi_msg_v2 = weather.get_weather_aqi_message_v2(weather_aqi_data)
+            # messages.append(weather_aqi_msg_v2)
             line_bot_api.reply_message(event.reply_token, messages=messages)
 
     n = re.match('flight (.*)', text.lower())
