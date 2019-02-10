@@ -2,6 +2,9 @@
 import requests
 import os
 import json
+from datetime import datetime
+import dateutil.parser
+from dateutil.tz import gettz
 api_host = os.getenv('NEW_AQI_API_HOST', None)
 api_key = os.getenv('NEW_AQI_API_KEY', None)
 
@@ -50,6 +53,7 @@ class WeatherAQI(object):
             styles['text_color'] = '#718B3C'
             styles['text_size'] = 'xxl'
             styles['icon_url'] = 'https://i.imgur.com/3uysQp6.png'
+            styles['level_image_url'] = 'https://i.imgur.com/nETuKgV.png'
                 
         elif aqi_level > 50 and aqi_level <= 100:
             styles['text'] = 'Moderate'
@@ -57,6 +61,7 @@ class WeatherAQI(object):
             styles['text_color'] = '#A57F23'
             styles['text_size'] = 'xxl'
             styles['icon_url'] = 'https://i.imgur.com/jT8N7QZ.png'
+            styles['level_image_url'] = 'https://i.imgur.com/S8flXXh.png'
 
         elif aqi_level > 100 and aqi_level <= 150:
             styles['text'] = 'Unhealthy for Sensitive Groups'
@@ -64,6 +69,7 @@ class WeatherAQI(object):
             styles['text_color'] = '#b25826'
             styles['text_size'] = 'sm'
             styles['icon_url'] = 'https://i.imgur.com/ivh1pqK.png'
+            styles['level_image_url'] = 'https://i.imgur.com/D0vyXVx.png'
 
         elif aqi_level > 150 and aqi_level <= 200:
             styles['text'] = 'Unhealthy'
@@ -71,6 +77,7 @@ class WeatherAQI(object):
             styles['text_color'] = '#af2c3b'
             styles['text_size'] = 'xxl'
             styles['icon_url'] = 'https://i.imgur.com/8tXR9wV.png'
+            styles['level_image_url'] = 'https://i.imgur.com/Rbi6wIW.png'
 
         elif aqi_level > 200 and aqi_level <= 300:
             styles['text'] = 'Very Unhealthy'
@@ -78,6 +85,7 @@ class WeatherAQI(object):
             styles['text_color'] = '#946AA9'
             styles['text_size'] = 'xxl'
             styles['icon_url'] = 'https://i.imgur.com/rEfasQc.png'
+            styles['level_image_url'] = 'https://i.imgur.com/eibuQO2.png'
 
         elif aqi_level > 300:
             styles['text'] = 'Hazardous'
@@ -85,11 +93,11 @@ class WeatherAQI(object):
             styles['text_color'] = '#5D3B39'
             styles['text_size'] = 'xxl'
             styles['icon_url'] = 'https://i.imgur.com/DhQWeMe.png'
+            styles['level_image_url'] = 'https://i.imgur.com/qXm1PmD.png'
         return styles
 
     def get_aqi_message(self, aqi_raw_data):
         styles = self._get_aqi_message_style(aqi_raw_data['current_measurement']['aqius'])
-        print(json.dumps(styles))
         bubble = {
             "type": "bubble",
             "direction": "ltr",
@@ -169,7 +177,8 @@ class WeatherAQI(object):
             },
             "footer": {
                 "type": "box",
-                "layout": "horizontal",
+                "layout": "vertical",
+                "spacing": "md",
                 "contents": [
                     {
                         "type": "box",
@@ -235,6 +244,21 @@ class WeatherAQI(object):
                                 ]
                             }
                         ]
+                    },
+                    {
+                        "type": "separator"
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "postback",
+                            "label": "Today Forecast",
+                            "text": "Today Forecast",
+                            "data": "aqi_today_forecast?station_id={0}".format(aqi_raw_data['_id'])
+                        },
+                        "color": "#D6D6D6",
+                        "height": "sm",
+                        "style": "secondary"
                     }
                 ]
             },
@@ -247,4 +271,83 @@ class WeatherAQI(object):
                 }
             }
         }
+        return BubbleContainer.new_from_json_dict(bubble)
+
+    def _convert_str_to_date(self, date_str, tz_str, output_date_format='%-I%p'):
+        dt = dateutil.parser.parse(date_str)
+        local_dt = dt.astimezone(gettz(tz_str))
+        return local_dt.strftime(output_date_format)
+
+    def get_aqi_today_message(self, aqi_raw_data, limit=7):
+        local_timezone = aqi_raw_data['timezone']
+        today_date_str = self._convert_str_to_date(aqi_raw_data['current_weather']['ts'], tz_str=local_timezone, output_date_format='%A %-d %B %Y')
+        forecasts = aqi_raw_data['forecasts']
+        bubble = {
+            "type": "bubble",
+            "direction": "ltr",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": today_date_str,
+                        "align": "center",
+                        "size": "sm"
+                    },
+                    {
+                        "type": "separator"
+                    }
+                ]
+            }
+        }
+        added_item = 0
+        for index in range(0, limit):
+            if added_item > limit:
+                break
+            timestamp = forecasts[index]['ts']
+            if timestamp is not None: 
+                bubble['body']['contents'].append(
+                    {
+                        "type": "box",
+                        "layout": "horizontal",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": self._convert_str_to_date(timestamp, tz_str=local_timezone),
+                                "size": "sm",
+                                "gravity": "center"
+                            },
+                            {
+                                "type": "image",
+                                "url": "https://airvisual.com/images/{0}.png".format(forecasts[index]['ic']),
+                                "flex": 0,
+                                "gravity": "center",
+                                "size": "xs",
+                                "aspectRatio": "2:1"
+                            },
+                            {
+                                "type": "text",
+                                "text": "{0} °C".format(forecasts[index]['tp']),
+                                "size": "sm",
+                                "gravity": "center"
+                            },
+                            {
+                                "type": "image",
+                                "url": self._get_aqi_message_style(forecasts[index]['aqius'])['level_image_url'],
+                                "align": "end",
+                                "gravity": "center",
+                                "size": "xs",
+                                "aspectRatio": "2:1"
+                            }
+                        ]
+                    }
+                )
+                bubble['body']['contents'].append(
+                    {
+                        "type": "separator"
+                    }
+                )
+                added_item += 1
         return BubbleContainer.new_from_json_dict(bubble)
