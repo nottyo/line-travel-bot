@@ -189,7 +189,7 @@ class WeatherAQI(object):
                                     {
                                         "type": "text",
                                         "text": "{0} °".format(aqi_raw_data['current_weather']['tp']),
-                                        "size": "sm",
+                                        "size": "md",
                                         "gravity": "center",
                                         "color": "#AAAAAA"
                                     }
