@@ -259,6 +259,18 @@ class WeatherAQI(object):
                         "color": "#D6D6D6",
                         "height": "sm",
                         "style": "secondary"
+                    },
+                    {
+                        "type": "button",
+                        "action": {
+                            "type": "postback",
+                            "label": "Daily Forecast",
+                            "text": "Daily Forecast",
+                            "data": "aqi_daily_forecast?station_id={0}".format(aqi_raw_data['_id'])
+                        },
+                        "color": "#D6D6D6",
+                        "height": "sm",
+                        "style": "secondary"
                     }
                 ]
             },
@@ -351,3 +363,97 @@ class WeatherAQI(object):
                 )
                 added_item += 1
         return BubbleContainer.new_from_json_dict(bubble)
+
+    def get_aqi_daily_message(self, aqi_raw_data, limit=7):
+        local_timezone = aqi_raw_data['timezone']
+        daily_forecasts = aqi_raw_data['forecasts_daily']
+        added_item = 0
+        flex_carousel = {
+            "type": "carousel",
+            "contents": []
+        }
+        for index in range(0, limit):
+            if added_item > limit:
+                break
+            bubble = {
+                "type": "bubble",
+                "direction": "ltr",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": []
+                }
+            }
+            aqi = daily_forecasts[index]['aqius']
+            styles = self._get_aqi_message_style(aqi)
+            date_str = self._convert_str_to_date(daily_forecasts[index]['ts'], tz_str=local_timezone, output_date_format='%A %-d %B %Y')
+            if date_str is not None:
+                bubble['body']['contents'].extend(
+                    [
+                        {
+                            "type": "text",
+                            "text": date_str,
+                            "size": "sm",
+                            "align": "center",
+                            "color": styles['text_color']
+                        },
+                        {
+                            "type": "separator",
+                            "color": styles['text_color']
+                        },
+                        {
+                            "type": "box",
+                            "layout": "horizontal",
+                            "contents": [
+                                {
+                                    "type": "image",
+                                    "url": styles['icon_url'],
+                                    "aspectRatio": "1:1",
+                                    "flex": 0
+                                },
+                                {
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "contents": [
+                                        {
+                                            "type": "text",
+                                            "text": "{0}".format(aqi),
+                                            "size": 'xxl',
+                                            "align": "center",
+                                            "weight": "bold",
+                                            "color": styles['text_color']
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": "US AQI",
+                                            "size": "xs",
+                                            "align": "center",
+                                            "color": styles['text_color']
+                                        },
+                                        {
+                                            "type": "text",
+                                            "text": styles['text'],
+                                            "size": styles['text_size'],
+                                            "align": "center",
+                                            "gravity": "center",
+                                            "weight": "bold",
+                                            "color": styles['text_color'],
+                                            "wrap": True
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                )
+                bubble['styles'] = {
+                    "body": {
+                        "backgroundColor": styles['background_color']
+                    }
+                }
+                added_item += 1
+                bubble_container = BubbleContainer.new_from_json_dict(bubble)
+                flex_carousel['contents'].append(bubble_container)
+        carousel_container = CarouselContainer.new_from_json_dict(flex_carousel)
+        return carousel_container

@@ -222,13 +222,6 @@ def handle_postback_event(event):
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, there is no airport information for \"{0}\"'.format(airport_name)))
         else:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text='Sorry, I could\'t find airport information for {0}'.format(airport_code)))
-            
-    if 'aqi_daily' in data:
-        station_id = data.split('=')[1]
-        weather_aqi_forecast_raw = weather.get_weather_aqi_forecast(station_id)
-        weather_aqi_forecast = weather._normalize_aqi_forecast_data(weather_aqi_forecast_raw)
-        flex_message = weather.get_weather_aqi_daily_message(weather_aqi_forecast)
-        line_bot_api.reply_message(event.reply_token, messages=flex_message)
     
     if 'aqi_today_forecast' in data:
         station_id = data.split('=')[1]
@@ -236,6 +229,13 @@ def handle_postback_event(event):
         if weather_aqi_data is not None:
             bubble_msg = weather_aqi.get_aqi_today_message(weather_aqi_data)
             line_bot_api.reply_message(event.reply_token, messages=FlexSendMessage(alt_text='Today Air Quality', contents=bubble_msg))
+    
+    if 'aqi_daily_forecast' in data:
+        station_id = data.split('=')[1]
+        weather_aqi_data = weather_aqi.get_aqi_data(station_id)
+        if weather_aqi_data is not None:
+            carousel_container = weather_aqi.get_aqi_daily_message(weather_aqi_data)
+            line_bot_api.reply_message(event.reply_token, messages=FlexSendMessage(alt_text='Daily Air Quality', contents=carousel_container))
 
 def print_source(event):
     if isinstance(event.source, SourceUser):
