@@ -316,7 +316,7 @@ class WeatherAQI(object):
             }
         }
         added_item = 0
-        for index in range(0, limit):
+        for index in range(0, len(forecasts)):
             if added_item > limit:
                 break
             timestamp = forecasts[index]['ts']
@@ -374,7 +374,7 @@ class WeatherAQI(object):
             "type": "carousel",
             "contents": []
         }
-        for index in range(0, limit):
+        for index in range(0, len(daily_forecasts)):
             if added_item > limit:
                 break
             bubble = {
