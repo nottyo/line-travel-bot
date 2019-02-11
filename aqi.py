@@ -309,7 +309,8 @@ class WeatherAQI(object):
                         "size": "sm"
                     },
                     {
-                        "type": "separator"
+                        "type": "separator",
+                        "color": "#EAEAEA"
                     }
                 ]
             }
@@ -358,7 +359,8 @@ class WeatherAQI(object):
                 )
                 bubble['body']['contents'].append(
                     {
-                        "type": "separator"
+                        "type": "separator",
+                        "color": "#EAEAEA"
                     }
                 )
                 added_item += 1
