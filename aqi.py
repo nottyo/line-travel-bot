@@ -320,6 +320,8 @@ class WeatherAQI(object):
             if added_item > limit:
                 break
             timestamp = forecasts[index]['ts']
+            if 'ic' not in forecasts[index]:
+                continue
             if timestamp is not None: 
                 bubble['body']['contents'].append(
                     {
